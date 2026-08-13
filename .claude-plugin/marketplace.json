@@ -1,0 +1,15 @@
+{
+  "name": "thusharabuilds",
+  "description": "Claude Code skills from the Thushara Builds YouTube channel — WordPress and web-building workflows.",
+  "owner": {
+    "name": "Thushara Dissanayake",
+    "url": "https://github.com/thusharabuilds"
+  },
+  "plugins": [
+    {
+      "name": "wp-blockwright",
+      "source": "./plugins/wp-blockwright",
+      "description": "Build WordPress FSE sites with an AI agent — child-theme design tokens, owner-editable custom blocks, and dynamic content via Query Loop + Block Bindings."
+    }
+  ]
+}

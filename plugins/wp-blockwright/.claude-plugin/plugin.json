@@ -1,0 +1,9 @@
+{
+  "name": "wp-blockwright",
+  "description": "Build WordPress FSE sites with an AI agent — child-theme design tokens, owner-editable custom blocks, and dynamic content via Query Loop + Block Bindings.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Thushara Dissanayake",
+    "url": "https://github.com/thusharabuilds"
+  }
+}
