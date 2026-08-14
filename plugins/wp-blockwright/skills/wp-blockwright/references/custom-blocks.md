@@ -88,10 +88,24 @@ add_action('acf/init', function () {
     'name' => 'hero', 'title' => 'Hero',
     'render_callback' => 'bc_render_hero',   // echoes; wrap in function_exists guard
     'mode' => 'preview',
-    'supports' => ['anchor' => true, 'align' => ['full']],
+    'acf_block_version' => 3,
+    'supports' => ['anchor' => true, 'align' => ['full'], 'mode' => true],
   ]);
 });
 ```
+
+- **Always register with `'acf_block_version' => 3`.** That is SCF's current block engine
+  (v1 is officially deprecated): the block toolbar gets a pencil (and the sidebar an
+  "Open Expanded Editor" button) that opens the block's fields in a wide modal — long text
+  is edited there, not in the narrow side panel. Legacy v1/v2 blocks never show their edit
+  toggle in WP 7.0's always-iframed editor — a real build shipped v1 blocks and the owner
+  was left editing full paragraphs in the cramped sidebar. Saved data is unaffected: v3
+  reads the same flattened `data` format this skill composes. Known quirk: merely opening
+  the expanded editor migrates stored data to v3's field-key format and marks the post
+  dirty with zero user edits — expected and safe, but don't auto-save a page you didn't
+  mean to change.
+- **Never set `'mode' => false` in supports.** Content-only editing means no styling
+  controls — it does not mean locking the block to preview.
 
 Icon/asset choices: expose a select field whose values map to an inline-SVG library inside the
 render callback — the owner picks "Shield (assurance)" from a dropdown, never touches SVG.
