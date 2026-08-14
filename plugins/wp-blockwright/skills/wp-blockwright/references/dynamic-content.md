@@ -141,9 +141,14 @@ add_action('acf/init', function () {
   if (!function_exists('acf_add_options_page')) return;
   acf_add_options_page([
     'page_title' => 'Site Info', 'menu_slug' => 'site-info', 'position' => 61,
+    'capability' => 'manage_options',
   ]);
 });
 ```
+
+   Set `'capability' => 'manage_options'`: these values show on every page of the site, so
+   only admins should change them. The default (`edit_posts`) would let any Author-level
+   account rewrite the site-wide phone number.
 
 2. **Fields**: same `acf_import_field_group` recipe as always (references/custom-blocks.md),
    with the `location` rule targeting `options_page == site-info`. Populate via execute-php:

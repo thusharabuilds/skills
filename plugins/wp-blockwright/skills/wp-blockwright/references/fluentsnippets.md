@@ -15,7 +15,9 @@ Custom block PHP and CSS is hosted as FluentSnippets snippets, not in `functions
 a bespoke plugin, because: the owner can see and manage every piece of code from the dashboard;
 snippets are real files on disk (`wp-content/fluent-snippet-storage/N-slug.php`) so file tools
 still work; and a snippet that throws a fatal is **auto-disabled** instead of white-screening
-the site. Trade-off accepted: blocks depend on FluentSnippets staying active.
+the site. Trade-off accepted: blocks depend on FluentSnippets staying active. Because
+FluentSnippets and SCF host and render all custom code, keeping both updated is a security
+requirement, not housekeeping — each has shipped real security fixes.
 
 Convention: **one PHP snippet per block + one paired CSS snippet**, same group. Every snippet's
 source of truth is a local file in the project's `wp-build/` tree.

@@ -3,6 +3,7 @@
 ## Contents
 - Choosing the block type per section
 - The block-authoring workflow
+- Escape every field at the point of output
 - PHP-only block recipe (WP 7.0 autoRegister)
 - SCF block recipe
 - SCF field groups — use acf_import_field_group, NOT the SCF ability
@@ -38,6 +39,22 @@ exactly why rich sections route to SCF.
 3. Verify: each block registered (`WP_Block_Type_Registry`), no entries in
    `Helper::getErrorFiles()`, marker strings present in stored files.
 
+## Escape every field at the point of output
+
+Everything a render callback reads — `get_field()`, `get_sub_field()`, block attributes —
+arrives unescaped; ACF/SCF never escapes `get_field()` for you. A render callback runs on
+every page view, so a single unescaped field is a standing site-wide XSS. This exact pattern
+(a field or block attribute echoed raw) is behind real vulnerabilities in major block
+plugins. Escape at the echo, matched to where the value lands:
+
+- Text between tags → `esc_html()`. Inside an HTML attribute → `esc_attr()`. An
+  `href`/`src` → `esc_url()`. Numbers → cast `(int)`.
+- `wp_kses_post()` ONLY for a field deliberately meant to hold rich text — nothing else
+  gets it.
+- Icons and other inline SVG: the owner picks a *name* from a select field; the SVG lives
+  in a fixed PHP array behind an `isset()` check. Raw SVG never comes from a field.
+- Images: pass the attachment ID to `wp_get_attachment_image()` — it escapes its own output.
+
 ## PHP-only block recipe (WP 7.0 autoRegister)
 
 ```php
@@ -67,7 +84,7 @@ add_action('init', function () {
   entry is a structural rendering requirement, not an owner styling control.
 - The render callback **returns** markup, wrapped via
   `get_block_wrapper_attributes(['class' => ..., 'id' => $anchor])` — WP adds the
-  `.wp-block-{ns}-{name}` class your CSS scopes to. Escape everything.
+  `.wp-block-{ns}-{name}` class your CSS scopes to. Escape everything (rules above).
 - Side-panel controls are auto-generated from the attributes — no JS, no build step. **The
   attribute names ARE the panel labels** (`stat1_label` shows verbatim to the owner) — name
   attributes as the owner should read them.
