@@ -63,6 +63,15 @@ still need disk files.
   the viewport edge while the content inside them keeps the gutter. Omit either and you get one
   of two bugs: full-bleed sections that stop short of the edge, or text jammed against the
   screen edge at ~390px.
+- **blockGap white stripes**: the theme's `styles.spacing.blockGap` puts a top margin on every
+  root sibling (`header`/`main`/`footer`) *and* on every top-level section inside the content —
+  between full-bleed backgrounds it shows as a white stripe (observed live: 32px stripes above
+  the footer and below the header). Don't fix it by setting `blockGap: "0px"` in theme.json —
+  that collapses spacing in normal flowing content like blog posts. Instead zero the margins
+  with two scoped rules in the shared partial: `.wp-site-blocks > * { margin-block-start: 0 }`
+  and `.entry-content > [class*="acme-"] { margin-block-start: 0 }` (your project prefix — this
+  catches every section wrapper whether or not it carries `alignfull`). Core applies these gaps
+  via zero-specificity `:where()` rules, so a plain class wins (see references/css-rules.md).
 
 Every preset becomes `--wp--preset--{feature}--{slug}` on `body` in both editor and front end —
 these variables are what every block stylesheet references, and what Global Styles lets the
