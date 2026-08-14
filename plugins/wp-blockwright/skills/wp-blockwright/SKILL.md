@@ -76,12 +76,29 @@ before building.
    lives in the block instance; the owner edits it in the side panel.
    - Simple fields (text, number, boolean, dropdown) → **WP 7.0 PHP-only block** (`autoRegister`).
    - Rich fields (image picker, WYSIWYG, repeater rows) → **SCF block**.
-2. **Dynamic / repeating sections** (blog lists, CPT card grids) → **Query Loop + core post
+2. **Dynamic / repeating sections** (blog lists, CPT card grids, same-layout item pages —
+   services, team, projects) → **Query Loop + core post
    blocks**. A single custom-field value inside any block layout → **Block Bindings**
    (`core/post-meta`) on a plain core block — no custom block, no PHP rendering.
 
 Never place a block that stores its own fields inside a loop — every card would show the same
 content. Inside loops, data must come from the *looped post*.
+
+## Model the content, don't just copy the pages
+
+While surveying the source site, ask what each piece of content *is*, not just what pages
+exist. When a better model applies, recommend it and **check with the owner before
+deciding** — never silently pick either way:
+
+- **Items of the same kind sharing one layout** (services, team members, projects,
+  locations…) → a **CPT + custom fields** (step 5, references/dynamic-content.md): one
+  template keeps them identical, the listing updates itself via Query Loop, the owner adds
+  the next item by filling in fields. (A real port silently built three same-layout service
+  pages as separate block pages; adding a fourth now means hand-copying one.)
+
+- **Global values repeated across pages** (contact email, phone, address, socials) → an
+  **SCF options page**, pulled into blocks via Block Bindings — the owner changes them
+  once, every page updates (recipe in references/dynamic-content.md).
 
 ## The two pushes (they are different in kind)
 

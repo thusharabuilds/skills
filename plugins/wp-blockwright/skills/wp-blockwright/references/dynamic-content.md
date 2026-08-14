@@ -9,6 +9,7 @@ Only run this step if the site actually has blog/CPT content. Sub-order: content
 - 5c. Archive page: the `home` template + Query Loop
 - 5d. Single post template
 - CPTs and custom taxonomies
+- Site-wide values: SCF options page + Block Bindings
 
 ## 5a. Creating posts from source content
 
@@ -126,3 +127,45 @@ and the CPT public/queryable — required for bindings and Query Loop targeting.
 same Query Loop recipe with the query's post type set (inherit off). For bespoke card logic core
 can't express, a dynamic PHP block reading `$block->context['postId']` (`usesContext:
 ['postId']`) is the escape hatch — never an SCF/instance-field block inside a loop.
+
+## Site-wide values: SCF options page + Block Bindings
+
+Values that repeat across pages (contact email, phone, address, socials) go on ONE SCF
+options page — the owner edits them in one place, every page updates. Never hard-code the
+same string into several blocks.
+
+1. **Register the page** (a FluentSnippets PHP snippet — must run on every request):
+
+```php
+add_action('acf/init', function () {
+  if (!function_exists('acf_add_options_page')) return;
+  acf_add_options_page([
+    'page_title' => 'Site Info', 'menu_slug' => 'site-info', 'position' => 61,
+  ]);
+});
+```
+
+2. **Fields**: same `acf_import_field_group` recipe as always (references/custom-blocks.md),
+   with the `location` rule targeting `options_page == site-info`. Populate via execute-php:
+   `update_field('field_key', $value, 'option')`.
+3. **Display in core blocks**: `core/post-meta` reads only post meta, so the same snippet
+   registers a tiny custom bindings source:
+
+```php
+add_action('init', function () {
+  register_block_bindings_source('bc/site-info', [
+    'label' => 'Site info',
+    'get_value_callback' => function ($args) {
+      if (!function_exists('get_field')) return '';
+      return (string) get_field($args['key'] ?? '', 'option');
+    },
+  ]);
+});
+```
+
+   Then bind like any other source:
+   `"metadata": {"bindings": {"content": {"source": "bc/site-info", "args": {"key": "contact_email"}}}}`.
+   Inside a custom block's PHP render callback, skip the binding and read
+   `get_field('contact_email', 'option')` directly.
+4. Verify: change a value on the options page, reload a front-end page that binds it — the
+   new value must appear (and the binding renders empty, visibly, if the key is wrong).
