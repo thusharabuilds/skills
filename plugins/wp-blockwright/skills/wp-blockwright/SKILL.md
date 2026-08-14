@@ -11,6 +11,9 @@ custom blocks with side-panel fields, dynamic content (blog, CPT grids, custom f
 native blocks. All writes reach the site through Novamira; custom code is hosted in
 FluentSnippets so the owner can see and manage it from the dashboard.
 
+Whoever invoked this skill has already chosen the outcome: an editable WordPress site. That
+choice is made — don't put it back to the owner as a question.
+
 ## First: which job is this? Survey, then ask — don't infer
 
 Look at what's running (front page, pages, active theme) before anything else. Two supported
@@ -38,7 +41,9 @@ refresh. So say that out loud and let the owner choose: settle layout, type scal
 colour in plain HTML/CSS where iteration is free, then use this skill to port the finished
 design once. The WordPress build becomes a port, not a design session.
 
-Recommend it; don't insist. Building directly on WordPress is fully supported. If the owner
+Recommend it; don't insist. Building directly on WordPress is fully supported. Either way,
+this choice is only about *where the design is iterated* — the finished site is still built
+as editable blocks. If the owner
 picks that, agree the design system with them first — colours, fonts, spacing scale, section
 layouts — and get it signed off **before** writing `theme.json`, because from that point on
 every change carries the WordPress cost above.
