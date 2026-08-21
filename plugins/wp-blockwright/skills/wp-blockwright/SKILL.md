@@ -105,6 +105,19 @@ deciding** — never silently pick either way:
   **SCF options page**, pulled into blocks via Block Bindings — the owner changes them
   once, every page updates (recipe in references/dynamic-content.md).
 
+- **Anything that submits data** (contact form, newsletter signup, booking, quote request) →
+  **not ours to build.** Raise it during the survey, before building anything: the owner creates
+  the form in their form plugin (Fluent Forms, WPForms, Contact Form 7, Gravity — whichever
+  they already run) and hands back a **shortcode or block name**; you place and style it
+  (recipe in references/custom-blocks.md). Flagging it at survey time matters — making the
+  form is the owner's homework, so they can do it while you build the rest. Porting the design's
+  `<form>` markup instead gives the owner a form that looks perfect and submits nowhere: no
+  handler, no spam filter, no entries list, no email. *"I'll just write the handler myself in
+  FluentSnippets"* is the rationalization to refuse — it strands the owner with a form they
+  cannot see or manage from their dashboard. **Search and comments are NOT this**: core ships
+  working blocks for both, so place and style those normally. (A login form on a page has no
+  core block — that one is plugin side.)
+
 ## The two pushes (they are different in kind)
 
 **Push 1 — the block.** Code. A PHP file describing a Hero block's fields and the HTML it
@@ -194,6 +207,9 @@ any CSS — WordPress ships none of the resets a static site's CSS assumes.
   the page (set the anchor on the section's wrapper group).
 - **Field keys are the contract.** Once a page stores SCF block data, never change the field
   keys — block data references keys, not names.
+- **Never hand-build a form that submits data.** The owner's form plugin owns contact,
+  newsletter and booking forms — you get a shortcode and style around it; core owns search and
+  comments. You never write the part that receives a submission.
 - **Set heading levels explicitly.** `core/post-title` and heading-type blocks default to h2;
   archives and single templates need `level: 1`. Give custom heading blocks a level attribute.
 - **Name FluentSnippets groups after page sections** (`Hero Section`, `Site Frame`, `Blog`) —

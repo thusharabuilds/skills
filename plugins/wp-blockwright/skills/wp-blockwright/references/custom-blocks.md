@@ -10,6 +10,7 @@
 - Assembling the page from block JSON
 - The `&`-mangling repair recipe
 - Layout and design patterns
+- Placing the owner's form
 - Page setup details
 
 ## Choosing the block type per section
@@ -73,7 +74,7 @@ add_action('init', function () {
 });
 ```
 
-- **Owner editing is content-only, by design (owner decision 2026-08-13).** The side panel
+- **Owner editing is content-only, by design — a deliberate v1 limitation.** The side panel
   exposes exactly the block's attributes — no colour, spacing, or typography panels — so keep
   `supports` to `autoRegister` + `anchor`. The block's look lives in its token-based CSS;
   restyling happens through `theme.json` / Global Styles, never per-block controls.
@@ -181,6 +182,66 @@ for the broken forms: a BARE `u0026` (backslash lost) or a `\&`. Only if one app
 - A hero that must match exact container widths can be `alignfull` and manage its own containers;
   ordinary sections stay content-width and let the theme constrain them.
 - **Cross-section anchors**: before finishing, walk the nav and confirm every `#target` exists.
+
+## Placing the owner's form
+
+Contact, newsletter, booking and quote forms are **never hand-built** (SKILL.md standing rule).
+The owner creates the form in their form plugin and gives you a **shortcode** or the plugin's
+**block name**. You place it and style it. Use what they gave you verbatim — never guess a
+shortcode or a form ID.
+
+**Default: the form is a sibling core block inside the section's group.**
+
+```
+{"name": "core/group", "attributes": {"align": "full", "className": "acme-contact"},
+ "innerBlocks": [
+   {"name": "acme/section-heading", "attributes": {...}},
+   {"name": "core/shortcode", "attributes": {"text": "[the-owners-shortcode]"}}
+ ]}
+```
+
+`core/shortcode` is the universal path — every form plugin ships one. If the owner names the
+plugin's own block instead, use that; it gives them a form picker in the editor. Either way the
+form stays a **separate block** the owner can swap, re-point or delete without touching your
+section block.
+
+**Fallback — only when the form must render INSIDE a custom block** (e.g. a two-column block
+whose other half is block fields). Give the block a `form_shortcode` string field and render it
+with `do_shortcode()`:
+
+```php
+$shortcode = trim( $attributes['form_shortcode'] ?? '' );
+if ( $shortcode !== '' && preg_match( '/^\[[a-z0-9_-]+[^\]]*\]$/i', $shortcode ) ) {
+    echo do_shortcode( $shortcode );   // deliberately NOT escaped — see below
+}
+```
+
+This is the **one exception** to "escape every field at the point of output" above: escaping it
+would print the shortcode as literal text on the page. That is exactly why the `preg_match`
+guard is not optional — it holds the field to a single shortcode call and nothing else. Prefer
+the sibling-block default whenever the layout allows it.
+
+**Styling.** Wrap the form in your prefixed class and target the plugin's own classes from a
+FluentSnippets CSS snippet, using theme tokens (references/css-rules.md):
+
+```css
+.acme-contact input[type="text"],
+.acme-contact input[type="email"],
+.acme-contact textarea {
+  font-family: var(--wp--preset--font-family--body);
+  color: var(--wp--preset--color--contrast);
+}
+```
+
+Never rename, strip or restructure the plugin's markup or classes — its validation and submit
+JS depend on them. Style from the outside only. Check the rendered form at all three viewports
+like any other section; plugin defaults rarely match the design's spacing.
+
+**If the shortcode has not arrived** by the time you reach that section: build the rest of the
+section and put a `core/paragraph` in the form's slot that cannot be mistaken for a form —
+e.g. "FORM PLACEHOLDER — replace with the contact form shortcode." Record it in your report.
+Never render input fields as a stand-in: a convincing fake form is the exact failure this rule
+exists to prevent.
 
 ## Page setup details
 
