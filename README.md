@@ -7,7 +7,7 @@ Skills from the [Thushara Builds](https://www.youtube.com/@thusharabuilds) YouTu
 Inside Claude Code:
 
 ```
-/plugin marketplace add thusharabuilds/skills
+/plugin marketplace add https://github.com/thusharabuilds/skills
 /plugin install wp-blockwright@thusharabuilds
 ```
 
