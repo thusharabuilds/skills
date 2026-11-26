@@ -3,8 +3,9 @@
 ## Contents
 - Reaching the site (and choosing the right ability)
 - execute-php patterns (transport, verification)
-- Uploading files
-- wp-cli
+- Uploading files and deploying the theme/plugin (zip recipe)
+- No wp-cli? Use execute-php
+- Approvals, sign-in and read-only calls
 - The Gutenberg queue (composing content as block JSON)
 - Self-finalizing a batch (admin access link + browser)
 - Session and verification gotchas
@@ -39,7 +40,7 @@ and how each one fails.
 `novamira-design` skill, ask the owner whether they want a page builder / Gutenberg / child
 theme, prefer built-in skills like `gutenberg-edit-content`. Those questions are ones this skill
 has already answered — don't re-ask the owner, and don't blend write paths mid-build: this
-skill's path (queue / fast lane, code in FluentSnippets, tokens in the child theme) stays
+skill's path (queue / fast lane, block code in the site plugin, tokens in the child theme) stays
 authoritative. Novamira's verification abilities (e.g. `check-design`) are compatible and worth
 using as extra checks.
 
@@ -64,10 +65,41 @@ and run one execute-php installer that `ZipArchive`-extracts and processes each 
 the zip. Upload tokens are long base64 strings — script the create-link + curl in one step;
 hand-copying a token has corrupted it before (→ 401).
 
-## wp-cli
+### Deploying the child theme or the blocks plugin (tested recipe)
 
-The wp-cli ability needs `args` as an **array** (e.g. `["option", "update", "blogname", "Acme"]`),
-not a command string.
+The CLI's `novamira upload` **refuses PHP files outside `wp-content/novamira-sandbox/`** and
+**won't overwrite an existing file**. So ship code as a zip:
+
+1. Zip the local folder (`wp-build/themes/<slug>` or `wp-build/plugins/<site>-blocks`).
+2. `novamira --site <site> --yes upload <zip> wp-content/uploads/<site>-deploy.zip`
+   (a zip isn't PHP, so it's allowed).
+3. One execute-php that: opens the zip with `ZipArchive`, extracts to a temp folder, copies every
+   file over the live theme/plugin folder (first install = plain extract), deletes the zip and
+   the temp folder, does any one-time setup **only if missing** (activate, set the logo, create
+   the Main menu), clears caches (`wp_cache_flush()`, `wp_clean_themes_cache()`), and returns a
+   list of files written with md5s.
+4. Verify on the front end (and in the editor for blocks).
+
+Keep the execute-php input in a JSON file and pass it with `--input @deploy.json` so the PHP
+isn't mangled by shell quoting.
+
+## No wp-cli? Use execute-php
+
+Don't assume a wp-cli ability exists (Novamira v2 had none on the tested site). Everything it
+would do has a PHP call: `switch_theme('<slug>')`, `activate_plugin('<dir>/<file>.php')`,
+`update_option('blogname', …)`, plugin installs via `Plugin_Upgrader`. If a wp-cli ability is
+there, it needs `args` as an **array**, not a command string.
+
+## Approvals, sign-in and read-only calls
+
+- **Novamira v2 can require approval**: a write waits until a person approves it under AI Activity,
+  and later calls join the pending batch. Queue related writes together so the owner approves
+  once, and tell them a batch is waiting. (Approvals can be switched off per site; check which
+  applies before assuming writes landed.)
+- **A site in "Coming Soon" / maintenance mode blocks sign-in**: REST returns `rest_coming_soon`
+  (401) on the OAuth register/token calls. Turn it off before `novamira auth login`.
+- Read-only execute-php calls (reading options, checking registrations) can be marked low/medium
+  attention; they don't need the same care as writes.
 
 ## The Gutenberg queue — composing content as block JSON
 
@@ -146,7 +178,7 @@ the owner can edit, which is the entire reason for this skill.
 There is a direct-write ability that skips the queue, the browser session and finalization
 entirely. It accepts **only** Novamira's own `novamira/*` dynamic-only blocks (`save: null`, so
 there is no static markup to generate) and refuses everything else. Blocks this skill builds are
-registered from a snippet under our own namespace, so they are refused. Don't spend a cycle
+registered from the site plugin under our own namespace, so they are refused. Don't spend a cycle
 discovering this.
 
 ## The `serialize_blocks()` fast lane — no queue, no browser (custom blocks ONLY)

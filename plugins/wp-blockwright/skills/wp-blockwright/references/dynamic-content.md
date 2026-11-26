@@ -37,7 +37,7 @@ Converting source articles (markdown/HTML) into Gutenberg posts:
 Native blocks CAN display custom-field data — the Block Bindings API (WP 6.5+), no custom block
 and no PHP rendering:
 
-1. **Register the meta in PHP that runs on every request** (a FluentSnippets PHP snippet):
+1. **Register the meta in PHP that runs on every request** (a PHP file in the site plugin, e.g. `inc/meta.php`):
 
 ```php
 add_action('init', function () {
@@ -64,8 +64,9 @@ add_action('init', function () {
    Leave the bound content empty so a broken binding is *visible* during verification instead
    of masked by fallback text.
 
-Bindable (6.9-era; the list grows each release): image `id/url/title/alt/caption`,
-heading/paragraph `content`, button `url/text/linkTarget/rel`, post-date `datetime`. Meta must
+Bindable (grows each release): image `id/url/title/alt/caption`, heading/paragraph `content`,
+button `url/text/linkTarget/rel`, post-date `datetime`; WP 7.1 adds list items and nested blocks
+(not yet tested here). Meta must
 be `single: true`, not underscore-prefixed; repeaters aren't natively bindable.
 
 **Byline pattern**: author credentials ("Jane Doe, CPA") belong to the *article* — store them in
@@ -73,7 +74,7 @@ post meta and bind, don't invent WP user accounts per byline.
 
 ## 5c. Archive page: the `home` template + Query Loop
 
-The whole archive is native blocks — `core/query` + post blocks + one CSS snippet. The owner
+The whole archive is native blocks — `core/query` + post blocks + a few rules in the child theme's `style.css`. The owner
 edits columns, per-page, excerpt length, and ordering through normal side panels.
 
 Shells via execute-php: create the Blog page + `update_option('page_for_posts', $id)`; then the
@@ -115,7 +116,7 @@ blocks:
 - Prev/next: a flex group with two `core/post-navigation-link` blocks
   (`{type: "previous"/"next", showTitle: true, arrow: "arrow"}`) — WP renders nothing at the
   ends of the timeline, correct with zero handling.
-- Content typography lives in one CSS snippet targeting the native blocks the posts are made of
+- Content typography lives in the child theme's `style.css` (or theme.json element styles), targeting the native blocks the posts are made of
   (`h2`, `ul`, `li::marker`, `blockquote`, `figure.wp-block-image`, `.wp-element-caption`,
   `.wp-block-separator`, `.lead`). The separator needs `opacity: 1` to beat core's
   `has-alpha-channel-opacity` rule.
@@ -128,13 +129,16 @@ same Query Loop recipe with the query's post type set (inherit off). For bespoke
 can't express, a dynamic PHP block reading `$block->context['postId']` (`usesContext:
 ['postId']`) is the escape hatch — never an SCF/instance-field block inside a loop.
 
+- **"Related items" on a single CPT page**: WP 7.1's Query Loop has an "exclude current post"
+  option (not yet tested here) — use it instead of custom query code.
+
 ## Site-wide values: SCF options page + Block Bindings
 
 Values that repeat across pages (contact email, phone, address, socials) go on ONE SCF
 options page — the owner edits them in one place, every page updates. Never hard-code the
 same string into several blocks.
 
-1. **Register the page** (a FluentSnippets PHP snippet — must run on every request):
+1. **Register the page** (PHP in the site plugin — must run on every request):
 
 ```php
 add_action('acf/init', function () {
@@ -153,7 +157,7 @@ add_action('acf/init', function () {
 2. **Fields**: same `acf_import_field_group` recipe as always (references/custom-blocks.md),
    with the `location` rule targeting `options_page == site-info`. Populate via execute-php:
    `update_field('field_key', $value, 'option')`.
-3. **Display in core blocks**: `core/post-meta` reads only post meta, so the same snippet
+3. **Display in core blocks**: `core/post-meta` reads only post meta, so the same file
    registers a tiny custom bindings source:
 
 ```php

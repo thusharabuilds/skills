@@ -66,8 +66,11 @@ block editor (fresh admin-access-link — sessions expire in ~30 min), select ea
 `wp.data.dispatch('core/block-editor').selectBlock(clientId)`, and confirm the side panel shows
 **populated** fields (repeater rows present, image thumbnails set, dropdowns on the right
 value). Text fields rendering on the front end does NOT prove fields exist — ACF falls back to
-raw meta (references/custom-blocks.md). Editor previews should show the real design (the CSS
-snippets' `load_in_block_editor` flag).
+raw meta (references/custom-blocks.md). Editor previews should show the real design (block.json
+`style` loads inside the editor iframe). For SCF blocks with inline editing, also click a text
+field in the preview and type, and click the image/link to confirm the toolbar editor opens.
+For theme patterns (header, footer, overlay), open each in the Site Editor and confirm there's no
+"unexpected or invalid content" warning.
 
 ## Screenshot gotchas
 

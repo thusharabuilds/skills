@@ -1,90 +1,97 @@
 # CSS rules — read before writing any stylesheet
 
 ## Contents
-- Where CSS lives — the three homes
+- Where CSS lives — the homes
 - Port the resets first
-- Always use theme tokens
+- Tokens only, and say why
+- Block styles (button variants etc.)
+- Decorations are CSS backgrounds
 - Winning against core's CSS (specificity patterns)
 - Misc gotchas
 
-## Where CSS lives — the three homes
+## Where CSS lives — the homes
 
 | Home | What goes there |
 |---|---|
-| `theme.json` → `styles` | element styles — body background, headings, links, buttons, `:hover`. Data, not a stylesheet; the owner can retune it in Global Styles. |
-| FluentSnippets CSS snippets | everything else — global resets, header/footer styling, one `.css` per block, shared partials |
-| Child theme `style.css` | nothing but the theme header naming the parent |
-
-Block PHP and its CSS ship as a pair in the same snippet group, named after the page section;
-the CSS snippet needs `load_in_block_editor: 'yes'` (references/fluentsnippets.md).
+| `theme.json` → `styles` | Element and core-block styles: colours, type, buttons, links, `:hover`/`:focus`/`:active`. Data, not a stylesheet — the owner retunes it in Global Styles. Prefer this whenever it can express the rule. |
+| Child theme `style.css` | Global CSS theme.json can't express: resets, link underline offset, button lift/transition, block-style variants, header/footer/overlay styling, decorations, overrides of parent CSS. Enqueued from `functions.php` and inlined. |
+| Blocks plugin `blocks/<name>/style.css` | One per custom block, loaded via block.json `"style": "file:./style.css"` — only on pages that use the block, and inside the editor iframe. |
+| FluentSnippets CSS | Only small one-off tweaks the owner wants to see in the dashboard. Not for blocks — snippet CSS loads on every page and can't tell whether a block is present. |
 
 ## Port the resets first
 
-WordPress ships **none** of the global primitives a static site's CSS assumes. Each missing one
-surfaces later as a mystery bug reported by the owner. Port these before building any section:
+WordPress ships **none** of the global primitives a static site's CSS assumes. Port these before
+building any section:
 
-**1. Box-sizing** — WP does NOT reset to `border-box`. Any ported `width: 100% + padding` combo
-silently overflows (visible only on small screens, where there's no max-width slack to absorb
-it; the tell is horizontal scroll that pinch-zoom "fixes"). Add a reset **scoped to your block
-prefix** (never a global `*` reset — leave core/plugin styles alone), at low specificity so
-explicit rules still win:
-
+**1. Box-sizing**, scoped to your prefix (never a global `*` reset):
 ```css
-[class*="bc-"], [class*="bc-"]::before, [class*="bc-"]::after, [class*="bc-"] * {
+[class*="acme-"], [class*="acme-"]::before, [class*="acme-"]::after, [class*="acme-"] * {
   box-sizing: border-box;
 }
 ```
+Use YOUR prefix — the same one as your class names — or it matches nothing, silently.
 
-Substitute YOUR project's prefix — this selector must use the same prefix as your class names
-(the one-prefix standing rule in SKILL.md) or it matches nothing, silently.
-
-**2. Focus outlines** — neither core, themes, nor Global Styles ship any `:focus` styles, so the
-browser's default ring shows on tap/click (a tapped link keeps focus on mobile). Port
-keyboard-only focus, on brand tokens:
-
+**2. Focus outlines** — keyboard-only, on brand tokens (or set `:focus` on `elements.button` /
+`elements.link` in theme.json):
 ```css
-:focus:not(:focus-visible) { outline: none; }         /* silence for pointer input */
-:focus-visible {                                       /* keep for keyboard users */
-  outline: 2px solid var(--wp--preset--color--accent);
-  outline-offset: 3px;
-  border-radius: 3px;
-}
+:focus:not(:focus-visible) { outline: none; }
+:focus-visible { outline: 2px solid var(--wp--preset--color--ink); outline-offset: 3px; }
 ```
 
 **3.** Any base `a` / `ul` resets the original design's components assume.
 
-## Always use theme tokens
+## Tokens only, and say why
 
-Every value in every snippet stylesheet references `--wp--preset--*` (or `--wp--custom--*`)
-variables — colors, spacing, font sizes, radius, shadows. Never hardcode. Global Styles then
-re-skins custom blocks along with everything else. Scope every selector to the block's wrapper
-class (`.wp-block-{ns}-{name}` or your custom classNames) — snippet CSS is not auto-scoped.
+- Every value references a token: `var(--wp--preset--color--*)`, `--wp--preset--spacing--*`,
+  `--wp--preset--font-size--*`, `--wp--custom--*`. No hex codes, no raw font sizes. Global Styles
+  then re-skins custom blocks along with everything else. (Real miss: test heroes hard-coded a pink
+  hex and didn't follow the palette.) Layout numbers that aren't design-system values (a grid's
+  `1fr 2fr`, a 56px decoration height) are fine.
+- **Every rule gets a short comment saying why** it exists — "theme.json can't animate", "core only
+  collapses below 600px", "beats the !important preset class". The next agent (or you after a
+  parent update) needs to know which rules are still needed.
+- Scope every selector to the block wrapper (`.wp-block-{ns}-{name}`) or your own classNames.
 
-## Winning against core's CSS (specificity patterns)
+## Block styles (button variants etc.)
 
-Core's stylesheets print **after** snippet CSS, so equal specificity loses. Three recurring
-cases:
+Register in the child `functions.php`, style in the child `style.css`:
+```php
+register_block_style('core/button', ['name' => 'ghost', 'label' => __('Ghost', 'acme')]);
+```
+Use CSS (not theme.json `variations`) when the variant needs things theme.json can't carry —
+per-corner radius, inset box-shadow outlines. Plain class selectors
+(`.wp-block-button.is-style-ghost .wp-block-button__link`) beat theme.json's zero-specificity
+`:where()` rules. Document each variant in DESIGN.md.
 
-1. **Layout classes**: `.bc-nav__cta { display: none }` loses to
-   `.wp-block-buttons-is-layout-flex { display: flex }`. Prefix a parent class
-   (`.bc-header .bc-nav__cta`) — win on specificity, not order.
-2. **Interactive-state styles** (e.g. `.is-menu-open` padding): same fix. Standing rule: *any*
-   override of a core interactive-state style needs a parent-class prefix.
-3. **The opposite case — `:where()` styles**: core's blockGap margins use zero-specificity
-   `:where()` selectors, so a plain single class beats them (e.g.
-   `.bc-post-card__body > * { margin: 0 }` + your own flex `gap`). No prefix war needed there.
-4. **Constrained-layout force-centering**: core's `.is-layout-constrained > :where(…)` rule
-   sets `margin-left/right: auto !important` on children without an align class, so any child
-   carrying its own `max-width` is silently centred — and no specificity trick beats an
-   `!important`. Override with a page-scoped `!important` of your own on the element's side
-   margins (observed live: a max-width element was centred against the design until
-   overridden).
+## Decorations are CSS backgrounds
+
+Purely decorative art (border bands, medallions, motifs) goes in the child theme
+`assets/images/*.svg` and shows as a `::before`/`::after` background on the section — not an
+image block. The owner never edits it, screen readers skip it, and it can't be deleted by accident.
+Relative `url(assets/images/…)` works: WP rewrites URLs when it inlines the child style.css. Use
+`isolation: isolate` on the section and `z-index: -1` on the pseudo-element to keep it behind the
+content; `pointer-events: none`.
+
+## Winning against core's CSS
+
+Core's stylesheets often print after yours, so equal specificity loses:
+
+1. **Layout classes** (`.wp-block-buttons-is-layout-flex { display: flex }`) and
+   **interactive-state styles** (`.is-menu-open`): add a parent class (`.acme-header .x`) — win on
+   specificity, not order.
+2. **`:where()` styles** (blockGap margins): zero specificity, a plain single class beats them.
+3. **Constrained-layout force-centering**: `.is-layout-constrained > :where(…)` sets
+   `margin-left/right: auto !important` on children without an align class — only a page-scoped
+   `!important` of your own beats it.
+4. **Preset classes are `!important`** (`.has-lg-font-size`, `.has-ink-color`). Overriding one at a
+   breakpoint needs `!important` too — comment why.
+5. **Parent block styles with inline CSS** (Ipsum registers some with its own slugs in inline CSS
+   that can print after your file): add `:root` in front of the selector to win regardless of order.
 
 Diagnose with computed styles / matched rules, not guesswork.
 
 ## Misc gotchas
 
-- `core/separator` needs `opacity: 1` in your CSS to beat core's `has-alpha-channel-opacity`.
-- CSS snippet code must not contain `<style>` tags (see references/fluentsnippets.md).
-- One CSS snippet per block/section + one shared partial (eyebrow, buttons) is the right
-  granularity — no duplicated rules, still legible per-section in the dashboard.
+- `core/separator` needs `opacity: 1` to beat core's `has-alpha-channel-opacity`.
+- Respect `prefers-reduced-motion: reduce` for any lift/transition you add.
+- CSS snippet code (if any) must not contain `<style>` tags.
