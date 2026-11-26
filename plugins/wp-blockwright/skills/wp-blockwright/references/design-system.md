@@ -32,9 +32,7 @@ theme updates. Home for the customized `theme.json`: a **child theme** of the pa
 the child doesn't override falls through to the parent.
 
 Ruled out: style variations (wiped on update outside a child theme); Create Block Theme plugin
-(exports a standalone theme, loses parent updates). Plan B if a child theme is impossible: the
-`wp_theme_json_data_theme` PHP filter (WP 6.1+) can inject tokens from code — survives updates,
-but fonts still need disk files.
+(exports a standalone theme, loses parent updates).
 
 ## Token names: our own, by role
 
@@ -85,8 +83,21 @@ colour. Fix it once, by script, not by hand:
    parent slug left over (`--wp--preset--color--accent-1`, `contrast`…). Expect only core's own
    default variables.
 
-Known gap: the parent's style variations still show in Styles and set the parent's slugs. Tell
-the owner not to apply them (or remove them in the child).
+The parent's style variations (colour palettes, font pairings) still show in Styles and set the
+parent's slugs, so applying one breaks the look. Core always lists a parent's variations for a
+child theme and has no filter for it; hide them by emptying the Site Editor's REST response in
+the child `functions.php` (tested):
+```php
+add_filter('rest_request_after_callbacks', function ($response, $handler, $request) {
+  if ($response instanceof WP_REST_Response && 'GET' === $request->get_method()
+      && preg_match('#^/wp/v2/global-styles/themes/[^/]+/variations$#', $request->get_route())) {
+    $response->set_data([]);
+  }
+  return $response;
+}, 10, 3);
+```
+Block-style partials (`styles/blocks/`) use another route and stay; check they don't name parent
+slugs.
 
 ## Child theme recipe
 

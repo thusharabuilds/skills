@@ -31,11 +31,7 @@ Cheap and catches real bugs — curl each page and check:
 
 - HTTP 200; every section's key markup present (images, repeater rows, anchors).
 - **Zero literal `<!-- wp:` strings** in rendered output (broken block markup).
-- **No BARE `u0026`** (no preceding backslash) in rendered output or stored content — that is
-  the `&`-mangling bug (references/custom-blocks.md has the check-then-repair recipe). The
-  escaped form WITH its backslash inside stored attribute JSON is normal Gutenberg
-  serialization — do not "fix" it; a check that greps for `u0026` alone false-positives on
-  every correctly serialized page.
+- No bare `u0026` (old `&` bug, fixed in Novamira 1.11.3 — see references/custom-blocks.md).
 - Expected token values (`--wp--preset--*`) and asset URLs; HEAD-check fonts/images (200).
 - When verifying stored block JSON, grep for plain strings — serialized block JSON does not
   escape slashes (`"source":"core/post-meta"` appears literally).
