@@ -127,6 +127,11 @@ don't count on a wp-cli ability being there.
 - **Palette**, **typography** (`fontFamilies` + `fontFace` for self-hosted fonts; `fontSizes`
   with per-size `fluid: {min, max}` plus global `"fluid": true`), **spacing** (`spacingSizes`,
   pure-digit slugs `10`–`90` are safe).
+- **Fluid where it matters, fixed where it doesn't.** Large type (h4 and up) and large spacing
+  (section padding, gutter) fluid; body/small text and small gaps fixed — body text shouldn't
+  shrink on phones. Write sizes and spacing in **rem**, with a rem part in the fluid middle value
+  (`clamp(2rem, 1.5618rem + 1.7978vw, 3rem)`, not `clamp(32px, 4vw, 48px)`) so they also follow
+  the reader's browser text size. WP builds font-size clamps itself; spacing clamps you write.
 - **`settings.layout`**: `contentSize` = the design's default content width; `wideSize` = its
   widest breakout (tested: 680px / 1280px). Skip this and you silently inherit the parent's widths.
 - **`settings.custom`** for tokens core has no preset for: radius, easing, gutter, shadow. They
