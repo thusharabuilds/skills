@@ -6,7 +6,7 @@ Only run this step if the site actually has blog/CPT content. Sub-order: content
 ## Contents
 - 5a. Creating posts from source content
 - 5b. Custom fields: register meta + Block Bindings
-- 5c. Archive page: the `home` template + Query Loop
+- 5c. Blog list page: template file + Query Loop
 - 5d. Single post template
 - CPTs and custom taxonomies
 - Site-wide values: SCF options page + Block Bindings
@@ -41,7 +41,7 @@ and no PHP rendering:
 
 ```php
 add_action('init', function () {
-  register_post_meta('post', 'bc_author', [
+  register_post_meta('post', 'acme_author', [
     'type' => 'string', 'label' => 'Author byline', 'single' => true,
     'show_in_rest' => true, 'default' => '',
     'sanitize_callback' => 'sanitize_text_field',
@@ -56,9 +56,9 @@ add_action('init', function () {
 
 ```json
 { "name": "core/paragraph", "attributes": {
-    "className": "bc-single__author",
+    "className": "acme-single__author",
     "metadata": { "bindings": { "content": {
-      "source": "core/post-meta", "args": { "key": "bc_author" } } } } } }
+      "source": "core/post-meta", "args": { "key": "acme_author" } } } } } }
 ```
 
    Leave the bound content empty so a broken binding is *visible* during verification instead
@@ -72,16 +72,26 @@ be `single: true`, not underscore-prefixed; repeaters aren't natively bindable.
 **Byline pattern**: author credentials ("Jane Doe, CPA") belong to the *article* — store them in
 post meta and bind, don't invent WP user accounts per byline.
 
-## 5c. Archive page: the `home` template + Query Loop
+## 5c. Blog list page: template file + Query Loop
 
-The whole archive is native blocks — `core/query` + post blocks + a few rules in the child theme's `style.css`. The owner
-edits columns, per-page, excerpt length, and ordering through normal side panels.
+Templates are **files in the child theme**, built the same way as the header and footer
+(references/site-frame.md): a one-line template that delegates to a hidden pattern holding the
+blocks. No queue, no browser, no finalize — edit the file, deploy the zip.
 
-Shells via execute-php: create the Blog page + `update_option('page_for_posts', $id)`; then the
-template shell — `wp_insert_post` with `post_type: 'wp_template'`, `post_name: 'home'` +
-`wp_set_object_terms($id, '<child-theme-slug>', 'wp_theme')` (same wp_theme rule as template
-parts). The `home` template renders the posts page when `show_on_front = page`. Compose via the
-Gutenberg queue; add the nav link to the `wp_navigation` post in the same batch.
+- **Which file:** WordPress uses `home.html` for the posts page if it exists, else `index.html`.
+  Ipsum ships `templates/index.html` → `patterns/hidden-index.php` (plus archive, search and
+  sidebar variants), and the child-theme generator has already copied them in your tokens — so
+  usually you **restyle that pattern** rather than build from zero. Add `home.html` → a new
+  `patterns/hidden-home.php` only if the blog page must differ from the fallback index.
+- Mark generated files you hand-edit as hand-built in the generator (its `HAND_BUILT` set), or the
+  next run overwrites them.
+- Via execute-php: create the Blog page + `update_option('page_for_posts', $id)` (with
+  `show_on_front = page`), and add a Blog link to the Main menu `wp_navigation` post.
+- Before re-deploying a template, check for a database copy (`wp_template` post with that slug
+  for your theme) — if the owner edited it in the Site Editor, that copy wins over your file.
+
+The whole page is native blocks — `core/query` + post blocks + a few rules in the child theme's
+`style.css`. The owner edits columns, per-page, excerpt length and ordering in the side panels.
 
 Query Loop decisions that matter:
 
@@ -101,8 +111,8 @@ Query Loop decisions that matter:
 
 ## 5d. Single post template
 
-Same shell recipe with `post_name: 'single'` (+ the `wp_theme` term). Compose 100% from native
-blocks:
+Same file recipe: Ipsum's `templates/single.html` → `patterns/hidden-single.php`. Restyle or
+rebuild that pattern, 100% from native blocks:
 
 - **The editorial-layout trick**: the template's main group gets
   `layout: {type: "constrained", contentSize: "720px", wideSize: "1040px"}` — a per-group
@@ -162,7 +172,7 @@ add_action('acf/init', function () {
 
 ```php
 add_action('init', function () {
-  register_block_bindings_source('bc/site-info', [
+  register_block_bindings_source('acme/site-info', [
     'label' => 'Site info',
     'get_value_callback' => function ($args) {
       if (!function_exists('get_field')) return '';
@@ -173,7 +183,7 @@ add_action('init', function () {
 ```
 
    Then bind like any other source:
-   `"metadata": {"bindings": {"content": {"source": "bc/site-info", "args": {"key": "contact_email"}}}}`.
+   `"metadata": {"bindings": {"content": {"source": "acme/site-info", "args": {"key": "contact_email"}}}}`.
    Inside a custom block's PHP render callback, skip the binding and read
    `get_field('contact_email', 'option')` directly.
 4. Verify: change a value on the options page, reload a front-end page that binds it — the

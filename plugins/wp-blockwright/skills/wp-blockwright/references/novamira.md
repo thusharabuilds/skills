@@ -96,6 +96,9 @@ there, it needs `args` as an **array**, not a command string.
   and later calls join the pending batch. Queue related writes together so the owner approves
   once, and tell them a batch is waiting. (Approvals can be switched off per site; check which
   applies before assuming writes landed.)
+- **"OAuth metadata is malformed or unavailable" usually means Novamira is switched off** in its
+  settings: it then hides its `/.well-known/oauth-*` addresses (404) while its other REST routes
+  still answer, so it looks half-working. Ask the owner to switch it on; permalinks are not the cause.
 - **A site in "Coming Soon" / maintenance mode blocks sign-in**: REST returns `rest_coming_soon`
   (401) on the OAuth register/token calls. Turn it off before `novamira auth login`.
 - Read-only execute-php calls (reading options, checking registrations) can be marked low/medium
@@ -103,9 +106,10 @@ there, it needs `args` as an **array**, not a command string.
 
 ## The Gutenberg queue — composing content as block JSON
 
-Never hand-write serialized block HTML. Compose every post, page, template, template part, and
-navigation menu as `{name, attributes, innerBlocks}` JSON and let the queue serialize it through
-the real editor:
+Never hand-write serialized block HTML. Compose posts and pages as `{name, attributes,
+innerBlocks}` JSON and let the queue serialize it through the real editor. (Templates, template
+parts and the overlay are theme files — references/site-frame.md. Menus are made of dynamic
+`core/navigation-link` blocks, so `serialize_blocks()` via execute-php is enough.)
 
 1. Create empty shells first via execute-php (the queue targets real post IDs) — `wp_insert_post`
    the page/template/part, set required terms (see the per-step reference files).
@@ -160,9 +164,6 @@ Never queue just the new section. Guards before you splice:
 - **Absent attributes are not lost data.** Reads omit attributes equal to their defaults — a
   block can come back with 4 of its 7 attributes and be intact. Don't "repair" what isn't broken.
 
-That round-trip is also why the `&`-mangling check below applies to the **whole page**, not just
-the part you added — everything passes through the finalizer, not only your new blocks.
-
 ### The queue refuses a page made entirely of raw HTML
 
 `allow_raw_html` defaults to false, and with it false the queue **rejects** content whose
@@ -200,7 +201,7 @@ session expiry entirely:
 3. Verify as always: read back, `parse_blocks()` round-trip, md5.
 
 This does not violate the no-hand-written-HTML rule: core does the serializing, including its
-own escaping of `&`, quotes and `--` inside comment delimiters. The `&`-mangling bug lives in
+own escaping of `&`, quotes and `--` inside comment delimiters. The old `&` bug lived in
 the finalizer and cannot occur on this path (verified — editor opens the result with zero
 invalid blocks).
 
@@ -240,7 +241,3 @@ The finalizer runs in a wp-admin browser tab. The agent can open one itself:
 - Serialized block JSON does **not** escape slashes: `"source":"core/post-meta"` appears
   literally in post content. When grepping stored content to verify, search for the plain
   string, not an escaped `\/` variant.
-- After finalizing a batch whose data contains `&` or other special characters, re-parse and
-  check the stored content for a BARE `u0026` (no preceding backslash). The escaped form
-  `\u0026` inside stored attribute JSON is normal serialization, not the bug. Repair only if
-  the bare form appears — see references/custom-blocks.md.

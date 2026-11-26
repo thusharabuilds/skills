@@ -9,7 +9,7 @@
 - SCF block recipe (block.json, v3, inline editing)
 - SCF field groups — local JSON in the plugin
 - Assembling the page from block JSON
-- The `&`-mangling repair recipe
+- `&` and special characters (old bug, now fixed)
 - Layout and design patterns
 - Placing the owner's form
 - Page setup details
@@ -109,7 +109,7 @@ plugins. Escape at the echo, matched to where the value lands:
 
 ```php
 add_action('init', function () {
-  register_block_type('bc/section-heading', [
+  register_block_type('acme/section-heading', [
     'title'      => 'Section Heading',
     'attributes' => [
       'eyebrow' => ['type' => 'string', 'default' => ''],
@@ -118,7 +118,7 @@ add_action('init', function () {
       'anchor'  => ['type' => 'string', 'default' => ''],
     ],
     'supports'        => ['autoRegister' => true, 'anchor' => true],
-    'render_callback' => 'bc_render_section_heading',
+    'render_callback' => 'acme_render_section_heading',
   ]);
 });
 ```
@@ -238,18 +238,12 @@ references/novamira.md). ACF block data uses the **flattened meta format** insid
 Every field: `field_name: value` plus `_field_name: field_key`. Repeaters: `items: <count>` +
 one flattened row entry per sub-field. Image fields take the attachment ID.
 
-## The `&`-mangling check (repair ONLY if it fires)
+## `&` and special characters (old bug, now fixed)
 
-Current Novamira (1.11.3+, verified) serializes `&` correctly on both write paths — an escaped
-`u0026` WITH its backslash inside stored attribute JSON is normal Gutenberg serialization, not
-the bug. After finalizing any batch containing `&`/special characters, check the stored content
-for the broken forms: a BARE `u0026` (backslash lost) or a `\&`. Only if one appears:
-
-1. `str_replace('\\&', '&', $content)` — a plain `&` is valid inside JSON strings.
-2. `wp_update_post` with `wp_slash($content)`.
-3. Verify with `parse_blocks()` that attributes decode and key fields survived. The same
-   backslash-stripping can mangle `<p>`/`\n` in WYSIWYG data — repair with a
-   `parse_blocks` → fix → `serialize_blocks` roundtrip.
+Older Novamira versions lost backslashes when finalizing, turning `\u0026` into a bare `u0026`
+or `\&`. Fixed since 1.11.3. If a page ever shows a bare `u0026`, repair with a `parse_blocks` →
+fix → `serialize_blocks` round-trip and `wp_update_post` with `wp_slash()`. The escaped form
+`\u0026` (with its backslash) is normal — don't "fix" it.
 
 ## Layout and design patterns
 
@@ -322,8 +316,8 @@ exists to prevent.
 ## Page setup details
 
 - Front page: `update_option('show_on_front', 'page')` + `page_on_front` = the page ID.
-- If the theme prints page titles and the design has none: set the theme's no-title block
-  template via `_wp_page_template` post meta (e.g. TT5's `page-no-title`).
+- If the theme prints page titles and the design has none: set the no-title template via
+  `_wp_page_template` post meta (`page-no-title` in both Ipsum and Twenty Twenty-Five).
 
 ## WP 7.1+ options to try (not yet tested)
 

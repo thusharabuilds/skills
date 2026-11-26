@@ -1,100 +1,33 @@
 # FluentSnippets — small non-block tweaks only
 
-## Contents
-- What FluentSnippets is (still) for
-- Snippet meta schema
-- The programmatic API (create / publish / update)
-- API gotchas (each caused a real failure)
-- CSS snippets — the two checkboxes
-- Organizing snippets
-- Installing many snippets at once (zip recipe)
+Optional. **Custom blocks don't live here** (references/custom-blocks.md), and global CSS goes in
+the child theme (references/css-rules.md). Use a snippet only for a small PHP hook or CSS tweak
+the owner wants to see and switch off from the dashboard (a redirect, an admin tweak). Snippets
+are real files (`wp-content/fluent-snippet-storage/N-slug.php`), a snippet that fatals is
+auto-disabled instead of white-screening the site, and the source of truth is still a local file
+in `wp-build/`. Keep the plugin updated — it runs code on every request.
 
-## What FluentSnippets is (still) for
-
-**Custom blocks no longer live here** — they go in the site plugin
-(references/custom-blocks.md), and global CSS goes in the child theme (references/css-rules.md).
-FluentSnippets is optional; use it only for small PHP hooks or CSS tweaks the owner wants to see
-and switch off from the dashboard (a redirect, an admin tweak, a one-off style fix). If it's
-active, keep it updated — it runs code on every request.
-
-Useful properties when you do use it: snippets are real files on disk
-(`wp-content/fluent-snippet-storage/N-slug.php`), and a snippet that throws a fatal is
-**auto-disabled** instead of white-screening the site. Every snippet's source of truth is still a
-local file in `wp-build/`.
-
-## Snippet meta schema
-
-| Field | Value |
-|---|---|
-| `name` (req) | Human title; seeds the filename (first 4 words) behind a unique numeric prefix — so a clashing name does NOT error; re-creating silently duplicates (see gotchas). |
-| `status` (req) | `published` or `draft`. `createSnippet` always forces `draft`. |
-| `type` (req) | `PHP`, `php_content`, `css`, `js`. |
-| `run_at` (req) | PHP: `all` (use this for block registration — the code adds its own `init` hook), `backend`, `wp_head`, `wp_footer`, or any hook name. CSS: `wp_head`. |
-| `group` | Organizational bucket — **name it after the page section** (`Hero Section`, `Site Frame`, `Blog`). |
-| `tags` | Comma-separated labels (e.g. `block,css`). |
-| `priority` | Hook priority, default 10. |
-| `load_as_file` | `yes` → CSS/JS emitted as a cached real file (cacheable across pages). |
-| `load_in_block_editor` | `yes` → CSS also injected into the Gutenberg editor. |
-| `condition` | Conditional display rules; `{status:'no',...}` = always run. |
-
-## The programmatic API
+## API (via execute-php)
 
 ```php
 use FluentSnippets\App\Helpers\Helper; // autoloaded — never require it
-
-$file = Helper::createSnippet(['meta' => $meta, 'code' => $code]); // returns filename or WP_Error
+$file = Helper::createSnippet(['meta' => $meta, 'code' => $code]);   // always lands as draft
 Helper::updateSnippet(['meta' => $meta, 'code' => $code, 'file_name' => $file, 'reactivate' => true]);
-Helper::cacheSnippetIndex('', true); // refresh the index
-
-(new FluentSnippets\App\Model\Snippet())->deleteSnippet($file);
-Helper::getErrorFiles(); // snippets auto-disabled after a fatal
+Helper::cacheSnippetIndex('', true);
+Helper::getErrorFiles();                                             // auto-disabled snippets
 ```
 
-Flow: `createSnippet` (lands as draft) → `updateSnippet` with `status: published` +
-`reactivate: true` → `cacheSnippetIndex` → **read the stored file back and verify a distinctive
-marker string exists**.
+Meta: `name`, `status` (`published`), `type` (`PHP`, `css`, `js`), `run_at` (PHP: `all` or a hook;
+CSS: `wp_head`; JS: `wp_footer`), `group` (name it after what it does), plus for CSS
+`load_as_file: 'yes'` and `load_in_block_editor: 'yes'`.
 
-## API gotchas (each caused a real failure)
+## Gotchas (each caused a real failure)
 
-- **Do NOT start `code` with `<?php`** — the API adds the tag itself and returns WP_Error
-  `invalid_code` if you include it. Strip it before pushing; keep it in the local canonical file
-  (so `php -l` lints locally).
-- **Wrap every named function in `if (!function_exists(...))`** (or use closures).
-  FluentSnippets validates a PHP snippet by loading it twice in one request — a bare named
-  function fatals with "cannot redeclare" and the snippet silently stays draft.
+- **Don't start `code` with `<?php`** — the API adds it and returns `invalid_code` otherwise.
+- **Wrap named functions in `if (!function_exists(...))`** or use closures — the snippet is
+  loaded twice when validated, and a redeclare fatal leaves it silently in draft.
+- **Not idempotent**: search the index for the name first and update instead of creating; one
+  create call once produced two published copies. After creating, check exactly one exists.
+- `updateSnippet` needs the full meta + code every time.
 - CSS/JS code must not contain `<style>`/`<script>` tags.
-- `updateSnippet` requires the FULL meta + code every time — there is no partial "just change
-  the group" call. To change meta later: parse the stored file's `@key:` docblock into an array,
-  strip the `<?php` + Internal-Doc header from the code portion, then call `updateSnippet` with
-  everything.
-- Check `Helper::getErrorFiles()` after pushing PHP — an auto-disabled snippet fails silently
-  from the front end's point of view.
-- **Snippet creation is not idempotent, and the transport can retry a call.** One
-  `createSnippet` call has produced TWO published copies of a snippet (the numeric filename
-  prefix makes every file unique, so no clash error fires — the result was a JS click handler
-  running twice). Extend the idempotent-by-slug rule to snippets: search the snippet index for
-  the name BEFORE creating — found → `updateSnippet`, not create — and after creating, verify
-  exactly one file matches the name.
-- Snippet type `js` (`run_at: wp_footer`) works as the schema table says — verified; used for
-  behavioral fixes like the mobile anchor-nav recipe in references/site-frame.md.
-
-## CSS snippets — turn BOTH checkboxes on
-
-For every block/section CSS snippet set `load_as_file: 'yes'` (real cacheable stylesheet) AND
-`load_in_block_editor: 'yes'` (styles render inside the editor). The editor flag is also the fix
-for the WP 7.0 `autoRegister` quirk where a block's styles don't auto-load in the editor —
-without it the owner edits unstyled gray boxes.
-
-## Organizing snippets
-
-Group by page section from the start — that's how owners think ("which snippet is the hero?").
-Example layout: `Site Frame` (header/footer CSS), `Hero Section` (hero PHP + hero CSS),
-`Services Section` (...), `Shared Styles` (shared partial CSS), `Blog` (archive CSS, single-post
-CSS, post-meta registration PHP).
-
-## Installing many snippets at once
-
-One `create-upload-link` for a single `.zip` of all local files → curl PUT → one execute-php
-installer that `ZipArchive`-extracts each file, strips the `<?php` line, and calls
-`createSnippet` + `updateSnippet(reactivate)` per snippet, then deletes the zip. Beats N
-separate upload links, and the local files stay canonical.
+- After pushing PHP, check `Helper::getErrorFiles()` and read the stored file back for a marker.
