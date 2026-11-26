@@ -2,16 +2,18 @@
 
 ## Contents
 - Choosing the block type per section
+- Where block code lives: the site plugin
 - The block-authoring workflow
 - Escape every field at the point of output
 - PHP-only block recipe (WP 7.0 autoRegister)
-- SCF block recipe
-- SCF field groups — use acf_import_field_group, NOT the SCF ability
+- SCF block recipe (block.json, v3, inline editing)
+- SCF field groups — local JSON in the plugin
 - Assembling the page from block JSON
 - The `&`-mangling repair recipe
 - Layout and design patterns
 - Placing the owner's form
 - Page setup details
+- WP 7.1+ options to try (not yet tested)
 
 ## Choosing the block type per section
 
@@ -29,16 +31,63 @@ PHP-only block limits (first-iteration feature): auto-generated side-panel contr
 inner blocks (renders via ServerSideRender); editor preview is a server round-trip. That's
 exactly why rich sections route to SCF.
 
+## Where block code lives: the site plugin
+
+Custom blocks live in **one small plugin per site**, `<site>-blocks` (e.g. `acme-blocks`) — not
+FluentSnippets, not the child theme.
+
+- Why a plugin, not the theme: these blocks render with PHP; if their code disappears, every
+  section using them goes blank. A theme switch would do exactly that. A plugin survives theme
+  changes and can be reused on the next client site.
+- Why not FluentSnippets: block.json gives per-block CSS loaded only where the block is used and
+  inside the editor iframe; snippet CSS loads everywhere and the legacy `acf_register_block_type`
+  style options can miss the iframed editor. Same code either way, so no extra risk.
+- FluentSnippets stays for small non-block tweaks only (references/fluentsnippets.md).
+
+Layout (tested):
+```
+acme-blocks/
+├── acme-blocks.php          # header + the two loops below
+├── AGENTS.md                # what's here, how to deploy, field-key rule
+└── blocks/
+    └── hero/                # one folder per block, named after the section
+        ├── block.json
+        ├── render.php
+        ├── style.css
+        └── fields/group_acme_hero.json   # SCF field group (local JSON)
+```
+Main file:
+```php
+/**
+ * Plugin Name:      Acme Blocks
+ * Description:      Custom page sections for Acme. One folder per block in /blocks.
+ * Version:          0.1.0
+ * Requires at least: 7.0
+ * Requires Plugins: secure-custom-fields
+ * Update URI:       false
+ * Text Domain:      acme-blocks
+ */
+defined('ABSPATH') || exit;
+add_action('init', function () {
+  foreach (glob(__DIR__ . '/blocks/*/block.json') as $file) register_block_type(dirname($file));
+}, 5);
+add_filter('acf/settings/load_json', function ($paths) {
+  foreach (glob(__DIR__ . '/blocks/*/fields', GLOB_ONLYDIR) as $dir) $paths[] = $dir;
+  return $paths;
+});
+```
+`Update URI: false` stops WordPress.org ever offering an "update" from a same-named plugin. Use
+`Requires Plugins: advanced-custom-fields` instead if the site runs ACF.
+
 ## The block-authoring workflow
 
-1. **Author locally first**: one `.php` + one `.css` per block in `wp-build/blocks/` (source of
-   truth), plus ONE shared partial CSS for cross-block pieces (eyebrows, buttons) so blocks
-   don't duplicate rules. `php -l` locally (local files keep the `<?php` tag; strip it when
-   pushing — see references/fluentsnippets.md).
-2. **Ship as a zip** → one execute-php installer creates + publishes each snippet (recipe in
-   references/fluentsnippets.md). Groups named after page sections.
-3. Verify: each block registered (`WP_Block_Type_Registry`), no entries in
-   `Helper::getErrorFiles()`, marker strings present in stored files.
+1. **Author locally first** in `wp-build/plugins/<site>-blocks/` (source of truth, in Git).
+   `php -l` every PHP file.
+2. **Deploy as a zip** (references/novamira.md): first install extracts it to
+   `wp-content/plugins/`, updates copy over the files; then `activate_plugin()`.
+3. Verify: each block registered (`WP_Block_Type_Registry::get_instance()->is_registered()`), the
+   block's CSS present on a page that uses it and **absent** on one that doesn't, marker strings
+   present in the deployed files. Bump the plugin and block.json `version` on every change.
 
 ## Escape every field at the point of output
 
@@ -92,52 +141,79 @@ add_action('init', function () {
 - **Real page content never goes in attribute defaults.** Give content attributes empty or
   generic defaults and pass the page's real values as block attributes at assembly time. A
   value equal to its default is NOT serialized into the page — the content then lives
-  invisibly in the snippet, and editing the snippet's defaults silently rewrites every page
+  invisibly in the block code, and editing the code's defaults silently rewrites every page
   that relied on them (observed live).
-- Editor styling: the paired CSS snippet's `load_in_block_editor: 'yes'` flag covers the
-  autoRegister editor-CSS quirk.
+- Editor styling: register the block's stylesheet (`wp_register_style`) and pass its handle as
+  `'style'` in the `register_block_type` args, then confirm it loads inside the editor iframe —
+  WP 7.0 had a quirk where autoRegister blocks missed their editor CSS.
+- Code lives in the site plugin (e.g. `blocks/section-heading/register.php` required from the
+  main file), same as SCF blocks.
+- **WP 7.0+: mark content attributes `"role": "content"`** (not yet tested here). Without it,
+  the block's text can't be edited when it sits inside a pattern or template part that uses
+  content-only editing, and the block can drop out of List View.
 
-## SCF block recipe
+## SCF block recipe (block.json, v3, inline editing)
 
-```php
-add_action('acf/init', function () {
-  if (!function_exists('acf_register_block_type')) return;
-  acf_register_block_type([
-    'name' => 'hero', 'title' => 'Hero',
-    'render_callback' => 'bc_render_hero',   // echoes; wrap in function_exists guard
-    'mode' => 'preview',
-    'acf_block_version' => 3,
-    'supports' => ['anchor' => true, 'align' => ['full'], 'mode' => true],
-  ]);
-});
+`blocks/hero/block.json`:
+```json
+{
+  "$schema": "https://schemas.wp.org/trunk/block.json",
+  "apiVersion": 3,
+  "name": "acme/hero",
+  "title": "Hero",
+  "description": "Hero section. Click any text and type. Click the photo or button to change them.",
+  "category": "design",
+  "icon": "cover-image",
+  "version": "0.1.0",
+  "textdomain": "acme-blocks",
+  "supports": { "anchor": true, "align": ["full"], "html": false },
+  "style": "file:./style.css",
+  "acf": { "blockVersion": 3, "mode": "preview", "renderTemplate": "render.php" }
+}
 ```
+This is the ACF-recommended way since 6.0; `acf_register_block_type()` is legacy. The
+`description` is what the owner sees in the inserter — tell them how to edit it.
 
-- **Always register with `'acf_block_version' => 3`.** That is SCF's current block engine
-  (v1 is officially deprecated): the block toolbar gets a pencil (and the sidebar an
-  "Open Expanded Editor" button) that opens the block's fields in a wide modal — long text
-  is edited there, not in the narrow side panel. Legacy v1/v2 blocks never show their edit
-  toggle in WP 7.0's always-iframed editor — a real build shipped v1 blocks and the owner
-  was left editing full paragraphs in the cramped sidebar. Saved data is unaffected: v3
-  reads the same flattened `data` format this skill composes. Known quirk: merely opening
-  the expanded editor migrates stored data to v3's field-key format and marks the post
-  dirty with zero user edits — expected and safe, but don't auto-save a page you didn't
-  mean to change.
-- **Never set `'mode' => false` in supports.** Content-only editing means no styling
-  controls — it does not mean locking the block to preview.
+- **Always `"blockVersion": 3`.** That's SCF's current block engine (v1 is deprecated): a toolbar
+  pencil and an "Open Expanded Editor" sidebar button open the fields in a wide modal. Legacy
+  v1/v2 blocks never showed their edit toggle in WP 7.0's always-iframed editor. Known quirk:
+  opening the expanded editor migrates stored data to field-key format and marks the post dirty
+  with zero edits — expected and safe.
+- **Inline editing (SCF 6.9+, free — the biggest owner win).** In `render.php`:
+  - Text / Textarea → typed straight into the preview: add
+    `acf_inline_text_editing_attrs('heading')` to the element holding the text.
+  - Image, Link, WYSIWYG, Repeater → click opens a small toolbar editor: add
+    `acf_inline_toolbar_editing_attrs(['button'])` to the element. A repeater edits as a whole,
+    not per row.
+  - Guard both with `function_exists()` so the block still renders if SCF is older.
+  - In preview (`$is_preview`), render an empty-state placeholder for an empty link/image so the
+    owner has something to click.
+- **Use SCF's own field types as they are** — a button is a Link field, a list is a Repeater, a
+  photo is an Image field (return `id`, render with `wp_get_attachment_image()`). Don't split
+  fields into Text just to make them typeable in place; the toolbar pop-up is fine for the rest.
+- `render.php` gets `$block`, `$content`, `$is_preview`, `$post_id`. Wrap output with
+  `get_block_wrapper_attributes()` and set `id` from `$block['anchor']`. Escape every field.
 
 Icon/asset choices: expose a select field whose values map to an inline-SVG library inside the
 render callback — the owner picks "Shield (assurance)" from a dropdown, never touches SVG.
 
-## SCF field groups — use acf_import_field_group, NOT the SCF ability
+## SCF field groups — local JSON in the plugin
 
-**The `scf/create-field-group` ability creates the group but ZERO field objects.** The
-symptom is sneaky: text fields still render (ACF falls back to raw meta) but image fields return
-a bare ID and repeaters return the row *count*, so `foreach` renders nothing. Diagnose with
-`acf_get_field('field_key')` → NOT FOUND.
+Keep each block's field group as a JSON file in `blocks/<name>/fields/` and point SCF at those
+folders with the `acf/settings/load_json` filter (main file above). Tested: SCF loads the group
+from the file (nothing in the database), repeater sub-fields included, and the group ships with
+the code. Location rule: `[{ "param": "block", "operator": "==", "value": "acme/hero" }]`.
+Sub-fields carry `"parent_repeater": "<repeater key>"`.
 
-Instead, via execute-php: `acf_import_field_group($full_definition)` — creates group + fields +
-sub-fields in one call. Delete any empty duplicate group shells afterward (the same key twice is
-bad).
+**Never use the `scf/create-field-group` ability** — it creates the group with ZERO field objects
+(text still renders from raw meta, but images return a bare ID and repeaters a row count).
+Diagnose with `acf_get_field('field_key')` → NOT FOUND.
+
+If you must create a group in the database instead (options pages, CPT fields from execute-php):
+`acf_import_field_group($full_definition)` — then **check every sub-field key with
+`acf_get_field()`, not just the top-level ones.** A real import created a repeater but silently
+skipped its sub-field; the repeater rendered empty with an "Undefined array key _name" warning.
+Fix: `acf_update_field([... 'parent' => <repeater post ID>, 'parent_repeater' => <repeater key>])`.
 
 **Field keys are the contract.** Page block data references field *keys*
 (`_field_name: field_key`), so groups can be recreated safely as long as the keys are reused —
@@ -221,15 +297,15 @@ would print the shortcode as literal text on the page. That is exactly why the `
 guard is not optional — it holds the field to a single shortcode call and nothing else. Prefer
 the sibling-block default whenever the layout allows it.
 
-**Styling.** Wrap the form in your prefixed class and target the plugin's own classes from a
-FluentSnippets CSS snippet, using theme tokens (references/css-rules.md):
+**Styling.** Wrap the form in your prefixed class and target the plugin's own classes from the
+child theme's `style.css`, using theme tokens (references/css-rules.md):
 
 ```css
 .acme-contact input[type="text"],
 .acme-contact input[type="email"],
 .acme-contact textarea {
   font-family: var(--wp--preset--font-family--body);
-  color: var(--wp--preset--color--contrast);
+  color: var(--wp--preset--color--ink);
 }
 ```
 
@@ -248,3 +324,17 @@ exists to prevent.
 - Front page: `update_option('show_on_front', 'page')` + `page_on_front` = the page ID.
 - If the theme prints page titles and the design has none: set the theme's no-title block
   template via `_wp_page_template` post meta (e.g. TT5's `page-no-title`).
+
+## WP 7.1+ options to try (not yet tested)
+
+Release-note features that may simplify builds. Test each on staging before relying on it.
+
+- **Pattern Overrides with custom blocks** (7.0): a synced pattern whose text changes per page
+  (e.g. a CTA band reused on several pages). Custom blocks opt in via the
+  `block_bindings_supported_attributes` filter. Test with one SCF and one PHP-only block.
+- **SVG Icon API** (7.1): `wp_register_icon_collection()` / `wp_register_icon()` /
+  `wp_get_icon()` — register the design's icons once; the core Icon block and render callbacks
+  can both use them. Would replace the fixed SVG array in render callbacks.
+- **PHP-only blocks get the current post ID in the editor preview** (7.1).
+- **Core PHP-only blocks still can't edit in the canvas** or offer media/link/rich-text controls
+  (explored for 7.1, not shipped, not on the 7.2 roadmap) — that's why rich sections stay SCF.

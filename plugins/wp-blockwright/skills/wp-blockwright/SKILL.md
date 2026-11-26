@@ -1,15 +1,16 @@
 ---
 name: wp-blockwright
-description: Builds WordPress FSE sites as an AI agent — design tokens in a child theme's theme.json, header/footer template parts, page sections as owner-editable custom blocks (WP 7.0 PHP-only or SCF), and dynamic content via Query Loop + Block Bindings, pushed through Novamira with code hosted in FluentSnippets. Use whenever the user wants to build, port, restyle, or extend a WordPress site with an AI agent — including "build this design on WordPress", converting a static/HTML/Astro site to WordPress, adding a section, page, blog, or custom post type to a WP site, or making sections editable for a site owner.
+description: Builds WordPress FSE sites as an AI agent — a child theme (on Ipsum or Twenty Twenty-Five) holding role-named design tokens, header, footer and mobile menu; page sections as owner-editable custom blocks (SCF with inline editing, or WP 7.0 PHP-only) in a small site plugin; and dynamic content via Query Loop + Block Bindings, all deployed through Novamira. Use whenever the user wants to build, port, restyle, or extend a WordPress site with an AI agent — including "build this design on WordPress", converting a static/HTML/Astro site to WordPress, adding a section, page, blog, or custom post type to a WP site, or making sections editable for a site owner.
 ---
 
 # WP-Blockwright — build WordPress FSE sites as an AI agent
 
 Turns a design (static HTML site, mockup, or brief) into a WordPress site the owner can edit
-without code: design tokens in a child theme, header/footer as template parts, page sections as
-custom blocks with side-panel fields, dynamic content (blog, CPT grids, custom fields) with
-native blocks. All writes reach the site through Novamira; custom code is hosted in
-FluentSnippets so the owner can see and manage it from the dashboard.
+without code: design tokens, header, footer and mobile menu in a child theme; page sections as
+custom blocks the owner edits by clicking and typing; dynamic content (blog, CPT grids, custom
+fields) with native blocks. Block code lives in one small site plugin (`<site>-blocks`); all
+writes reach the site through Novamira. Every site also gets an AGENTS.md and DESIGN.md so the
+next agent can pick up the work without re-deriving it.
 
 Whoever invoked this skill has already chosen the outcome: an editable WordPress site. That
 choice is made — don't put it back to the owner as a question.
@@ -63,24 +64,27 @@ every change carries the WordPress cost above.
    - *"My writes are only additive / it's a tiny change"* — additive writes still run
      arbitrary PHP on someone's site, and still need the gate.
 2. Only after the gate passes: run ONE read-only prerequisite check via `execute-php` —
-   WordPress ≥ 7.0 (PHP-only blocks need it), an FSE **block theme** active (any block theme
-   works; Twenty Twenty-Five is the tested default and the recommendation for new sites;
-   classic themes are NOT supported), FluentSnippets active, SCF **or** ACF active (either
-   works), required media/fonts already uploaded.
+   WordPress ≥ 7.0 (PHP-only blocks need it; 7.2 tested), an FSE **block theme** (Ipsum is
+   the recommended parent from WP 7.2; Twenty Twenty-Five below that; classic themes are NOT
+   supported), SCF 6.9+ **or** ACF active (SCF 6.9 adds inline editing), required media/fonts
+   available. FluentSnippets is optional (small tweaks only).
 3. Confirm tooling: Novamira is connected (MCP or CLI — either works, the abilities are the
    same), and a browser-automation tool (Playwright MCP, the agent's built-in browser, or
    similar) is available — it is required to finalize Gutenberg content batches.
 
-If a plugin is missing, offer to install it via wp-cli — cheap on a staging site the gate has
-already confirmed. Anything else missing: stop and tell the user what to install or confirm
+If a plugin is missing, offer to install it (via execute-php — don't assume a wp-cli ability)
+— cheap on a staging site the gate has already confirmed. Anything else missing: stop and tell the user what to install or confirm
 before building.
 
 ## The core mental model: two kinds of section
 
 1. **One-off editable sections** (hero, about, CTA, feature grid) → a **custom block**. Content
    lives in the block instance; the owner edits it in the side panel.
-   - Simple fields (text, number, boolean, dropdown) → **WP 7.0 PHP-only block** (`autoRegister`).
-   - Rich fields (image picker, WYSIWYG, repeater rows) → **SCF block**.
+   - Rich fields (image, link/button, WYSIWYG, repeater rows) → **SCF block** (block.json,
+     v3) — the default for most sections, because SCF inline editing lets the owner type
+     straight into the preview and click images/buttons to change them.
+   - Only plain fields (text, number, boolean, dropdown) and no need for in-place typing →
+     **WP 7.0 PHP-only block** (`autoRegister`, side-panel only).
 2. **Dynamic / repeating sections** (blog lists, CPT card grids, same-layout item pages —
    services, team, projects) → **Query Loop + core post
    blocks**. A single custom-field value inside any block layout → **Block Bindings**
@@ -113,16 +117,17 @@ deciding** — never silently pick either way:
   form is the owner's homework, so they can do it while you build the rest. Porting the design's
   `<form>` markup instead gives the owner a form that looks perfect and submits nowhere: no
   handler, no spam filter, no entries list, no email. *"I'll just write the handler myself in
-  FluentSnippets"* is the rationalization to refuse — it strands the owner with a form they
+  the plugin or a snippet"* is the rationalization to refuse — it strands the owner with a form they
   cannot see or manage from their dashboard. **Search and comments are NOT this**: core ships
   working blocks for both, so place and style those normally. (A login form on a page has no
   core block — that one is plugin side.)
 
 ## The two pushes (they are different in kind)
 
-**Push 1 — the block.** Code. A PHP file describing a Hero block's fields and the HTML it
-produces. Goes to **FluentSnippets**. Done once; makes **Hero** appear in the editor's block
-list. Not attached to any page. *Like adding a new Lego brick shape to the box.*
+**Push 1 — the block.** Code. A block folder (block.json, render.php, style.css, field group)
+describing a Hero block's fields and the HTML it produces. Goes into the **site plugin**,
+deployed as a zip. Done once; makes **Hero** appear in the editor's block list. Not attached
+to any page. *Like adding a new Lego brick shape to the box.*
 
 **Push 2 — the page.** Data. "The About page contains a Hero with heading X, then a CTA with
 text Y." Goes through the **Gutenberg queue** (or the fast lane — references/novamira.md).
@@ -133,9 +138,9 @@ batch fails; WordPress has never heard of `acme/hero`. Always code first, then p
 
 | Where it lives | Build it with | Data source |
 |---|---|---|
-| Simple one-off section | PHP-only block (`autoRegister`) in FluentSnippets | block instance fields |
-| Rich one-off section (image/WYSIWYG/repeater) | SCF block | block instance fields |
-| Header / footer | Template parts of core blocks | edited in Site Editor |
+| Rich one-off section (image/link/WYSIWYG/repeater) | SCF block (block.json) in the site plugin | block instance fields |
+| Simple one-off section | PHP-only block (`autoRegister`) in the site plugin | block instance fields |
+| Header / footer / mobile menu | Child theme parts → hidden patterns of core blocks | edited in Site Editor |
 | Archive / list / CPT grid | Query Loop + core post blocks | the looped post |
 | Single post / CPT page | `wp_template` of core post blocks | the queried post |
 | A custom-field value | Block Bindings on a core block | registered post meta |
@@ -148,8 +153,9 @@ has no blog: do not invent CPTs or posts to fill the workflow.
 ```
 Build progress:
 - [ ] 0. Safety gate + prerequisite check (above)
-- [ ] 1. Design system → child theme + theme.json  → read references/design-system.md
-- [ ] 2. Header + footer template parts            → read references/site-frame.md
+- [ ] 1. Design system → child theme + theme.json,
+        AGENTS.md + DESIGN.md                      → read references/design-system.md
+- [ ] 2. Header, footer, mobile menu overlay      → read references/site-frame.md
 - [ ] 3. FIRST section end to end — block PHP + CSS,
         on the page, verified — then the owner
         checkpoint, then the remaining sections    → read references/custom-blocks.md
@@ -166,7 +172,7 @@ queue batch for a page contains section one ALONE, and you verify it landed and 
 queueing the remaining sections.** Authoring everything up front and queueing all sections in
 one batch is still batch-everything, whatever your verification granularity — a real agent did
 exactly that and reported it as "built section-by-section" because it had *verified* each
-section. It doubles as the end-to-end test that the whole pipeline (snippets, queue, finalizer)
+section. It doubles as the end-to-end test that the whole pipeline (plugin deploy, queue, finalizer)
 works on this particular site, while one section is still cheap to redo. Then checkpoint with the owner — this is the useful moment,
 because they can now see a result: *"Hero's built and looks right. Want the remaining sections
 in one go, or one at a time so you can check each?"* (Asking at the start is useless; nobody
@@ -174,15 +180,17 @@ can answer it yet.) If the owner is unreachable at the checkpoint, don't stall a
 to batch-everything: continue section by section with per-section verification, keep new pages
 as drafts until verified, and record the skipped checkpoint in your report.
 
-Before step 1, read **references/novamira.md** (how every write reaches the site — the
-Gutenberg queue, self-finalization, upload links) and **references/fluentsnippets.md** (where
-all custom PHP/CSS lives and its API gotchas). Read **references/css-rules.md** before writing
-any CSS — WordPress ships none of the resets a static site's CSS assumes.
+Before step 1, read **references/novamira.md** (how every write reaches the site — the zip
+deploy, the Gutenberg queue, self-finalization, approvals). Read **references/css-rules.md**
+before writing any CSS — where each kind of CSS lives, and WordPress ships none of the resets a
+static site's CSS assumes. On Ipsum, read its design guide (`ipsum/get-design-guide` ability)
+before designing anything.
 
 ## Standing rules (each one earned by a real bug)
 
-- **Author locally first.** Every snippet, stylesheet, and theme file has a canonical copy in a
-  local `wp-build/` tree; lint PHP locally before pushing. No server-only code, ever.
+- **Author locally first.** Every theme, plugin and stylesheet file has a canonical copy in a
+  local `wp-build/` tree (`themes/`, `plugins/`, `tools/`); lint PHP locally before pushing. No
+  server-only code, ever.
 - **Verify every write.** API success ≠ content landed. After each push, read back a distinctive
   marker string or compare an md5 hash of the stored result. A placeholder once shipped silently
   while the API reported success.
@@ -190,7 +198,7 @@ any CSS — WordPress ships none of the resets a static site's CSS assumes.
   serialized block HTML. The Gutenberg queue is the default write path; a page composed
   ENTIRELY of this skill's own custom blocks may take the `serialize_blocks()` fast lane
   instead (references/novamira.md). Use preset slugs in attributes
-  (`backgroundColor: "contrast"`, `var:preset|spacing|50`) so the owner gets real editor controls.
+  (`backgroundColor: "dark"`, `var:preset|spacing|50`) so the owner gets real editor controls.
 - **One prefix, chosen at the start, used in all four places** — block namespace (`acme/hero`),
   PHP function names (`acme_render_hero`), CSS class names (`acme-header`), AND the box-sizing
   reset selector (`[class*="acme-"]`). The silent failure: picking a project prefix for class
@@ -201,8 +209,17 @@ any CSS — WordPress ships none of the resets a static site's CSS assumes.
 - **Port the design's global resets before building sections** (scoped `box-sizing: border-box`,
   `:focus-visible` outline rules). WordPress provides none of them; each missing one surfaces
   later as a mystery bug report from the owner. See references/css-rules.md.
-- **Reference theme tokens** (`--wp--preset--*`) in every stylesheet and inline SVG — never
-  hardcode colors, sizes, or spacing. Global Styles then re-skins everything.
+- **Our own token names, by role, on every site** (`surface`, `ink`, `dark`, `accent`…) — not the
+  parent theme's slugs; re-point the parent's styles to them by script (references/design-system.md).
+  **Never name a preset `text`, `background`, `link` or `border`** — they collide with core's own
+  classes and silently override every custom colour.
+- **Reference theme tokens** (`--wp--preset--*`, `--wp--custom--*`) in every stylesheet and inline
+  SVG — never hardcode colors, sizes, or spacing — and **give every CSS rule a one-line "why"
+  comment**. Global Styles then re-skins everything, and the next agent knows which rules matter.
+- **Don't reformat block markup** in patterns or templates once it works. The editor compares it
+  exactly; a tidy-up can turn valid blocks invalid.
+- **Keep AGENTS.md and DESIGN.md current** with every change (what lives where, tokens by role,
+  generated vs hand-built files).
 - **Cross-section anchors are a checklist item.** Every `#anchor` the nav links to must exist on
   the page (set the anchor on the section's wrapper group).
 - **Field keys are the contract.** Once a page stores SCF block data, never change the field
@@ -212,8 +229,8 @@ any CSS — WordPress ships none of the resets a static site's CSS assumes.
   comments. You never write the part that receives a submission.
 - **Set heading levels explicitly.** `core/post-title` and heading-type blocks default to h2;
   archives and single templates need `level: 1`. Give custom heading blocks a level attribute.
-- **Name FluentSnippets groups after page sections** (`Hero Section`, `Site Frame`, `Blog`) —
-  that is how owners think; a generic "blocks" group is unreadable to them.
+- **Name block folders and titles after page sections** (`hero`, `services`, "Hero") with a
+  block `description` that tells the owner how to edit it — that's how owners think.
 - **Mobile is part of done.** Verify at ~390px, ~700px, and desktop — including the nav overlay
   OPEN — before calling any step complete.
 
@@ -221,11 +238,11 @@ any CSS — WordPress ships none of the resets a static site's CSS assumes.
 
 | File | Read it when |
 |---|---|
-| references/novamira.md | Before the first write — every recipe for reaching the site |
-| references/fluentsnippets.md | Before creating any snippet — API, meta schema, gotchas |
-| references/design-system.md | Step 1 — child theme + theme.json + self-hosted fonts |
-| references/site-frame.md | Step 2 — template parts, navigation, mobile header |
-| references/custom-blocks.md | Step 3 — PHP-only blocks, SCF blocks, page assembly |
+| references/novamira.md | Before the first write — zip deploy, queue, approvals |
+| references/design-system.md | Step 1 — parent theme, child theme, tokens by role, AGENTS/DESIGN.md |
+| references/site-frame.md | Step 2 — header/footer patterns, logo, menu, overlay, mobile header |
+| references/custom-blocks.md | Step 3 — site plugin, SCF blocks with inline editing, PHP-only blocks, page assembly |
 | references/dynamic-content.md | Step 5 — posts, custom fields, Query Loop, single template |
-| references/css-rules.md | Before writing CSS — resets, specificity vs core, token usage |
+| references/css-rules.md | Before writing CSS — where CSS lives, resets, tokens, specificity |
 | references/verification.md | Steps 4 & 6 — the QA recipes that actually catch bugs |
+| references/fluentsnippets.md | Only if adding a small non-block tweak as a snippet |

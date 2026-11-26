@@ -1,98 +1,126 @@
-# Step 2 — Site frame: header + footer template parts
+# Step 2 — Site frame: header, footer, mobile menu
 
 ## Contents
-- The template-part recipe
-- Composition patterns that work
-- Mobile header — rules and the dropdown-menu recipe
-- Gotchas (positioning, specificity)
+- Where the frame lives (theme files, one-line delegates)
+- Logo, menu and shared pieces
+- The header
+- The mobile menu: navigation overlay part
+- The footer
+- Mobile header rules
+- Same-page anchor links in the overlay
+- Gotchas (positioning, specificity, edits that stop theme updates)
 
-## The template-part recipe
+## Where the frame lives
 
-1. **Create empty shells via execute-php** (the Gutenberg queue targets real post IDs):
-   `wp_insert_post` with `post_type: 'wp_template_part'`, slug `header`/`footer`, then
-   `wp_set_object_terms` → taxonomy `wp_theme` = **the child theme slug** (CRITICAL — template
-   override resolution matches on this term) and taxonomy `wp_template_part_area` =
-   `header`/`footer`. The navigation menu is its own `wp_navigation` post of
-   `core/navigation-link` blocks.
-2. **Compose blocks as `{name, attributes, innerBlocks}` JSON** and queue all targets (header,
-   footer, nav) into ONE batch; finalize per references/novamira.md.
-3. Fine styling = ONE CSS snippet (group `Site Frame`, both editor/file flags on), selectors
-   scoped to custom classNames you set on the blocks (`bc-header`, `bc-footer__*`), values via
-   `--wp--preset--*`.
+Build the header, footer and mobile menu as **files in the child theme**, the way Ipsum does:
 
-## Composition patterns that work
+- `parts/header.html` → one line: `<!-- wp:pattern {"slug":"acme/header-default"} /-->`
+- `patterns/header-default.php` → the real block markup, with a full docblock:
+  `Title`, `Slug`, `Categories`, `Block Types: core/template-part/header`, `Viewport width`, and a
+  **Description** that says in plain words what's in it. Agents and owners pick patterns by that
+  text — a bare "Header" tells nobody anything.
+- Same for `footer` (and any variants, e.g. Ipsum's `footer-wide` delegating to the same pattern)
+  and the `navigation-overlay` part.
 
-- **Brand/logo**: inline SVG in a nested `core/html` fragment + `core/site-title`. SVG colors
-  use `var(--wp--preset--color--...)` so Global Styles re-skins the logo too.
-- **Nav**: `core/navigation` with `ref` → the `wp_navigation` post. The built-in mobile
-  hamburger/overlay replaces any custom JS toggle from the original design for free, and the
-  owner edits links as normal menu items.
-- **Sticky header**: group attribute `style.position.type: "sticky"` (needs `appearanceTools`).
-- Colors/spacing as block attributes using preset slugs (`backgroundColor: "contrast"`,
-  `var:preset|spacing|50`) — the owner sees proper controls in the editor.
+Why files, not queued template parts: no queue, no browser, no finalize; version-controlled;
+re-deployable. Give key groups a `metadata.name` (`"Header Row"`, `"Brand"`, `"Menu and Booking"`)
+so List View reads like the design. Put visible strings through `esc_html__()` /
+`esc_html_x()` and URLs through `esc_url( home_url( '/#book' ) )`.
 
-## Mobile header — rules
+Write the block markup carefully once (valid comment JSON + matching HTML classes) and **don't
+reformat it later** — the editor compares markup exactly, and a "tidy-up" can make blocks invalid.
+Check each pattern opens in the Site Editor without "This block contains unexpected content".
 
-- **Verify at ~390px, ~700px, and desktop, with the nav overlay OPEN.** Desktop-only screenshots
-  pass while the phone header is a wrapped mess. Use the original design's own breakpoints as
-  the reference.
-- Compact the header at small widths following the original design's pattern — e.g. at ≤782px
-  shrink the bar CTA (`white-space: nowrap`, smaller font/padding) and hide the tagline; below
-  WP's 600px nav collapse, hide the bar CTA and instead add a **CTA item to the `wp_navigation`
-  menu** (own className, styled as a pill inside the overlay, `display: none` on desktop). The
-  owner keeps editing it as a normal menu item.
-- WP's default open-menu state (bare white full-screen takeover) looks off-brand. Restyling it
-  needs **CSS only, zero markup changes** — see the dropdown recipe below.
+**Once the owner edits a part in the Site Editor, WordPress saves a copy in the database and that
+copy wins** — later theme-file changes to that part no longer show. Before re-deploying a part,
+check for a `wp_template_part` post with that slug for your theme; if it exists, tell the owner
+(they can "Reset" it in the Site Editor) rather than silently deleting their edits.
 
-## The dropdown-panel mobile menu recipe
+## Logo, menu and shared pieces
 
-A polished alternative to the full-screen overlay: a panel anchored under the sticky header
-(brand background + blur, border-bottom + shadow, stacked links, CTA pill, slide-down
-animation, X replacing the hamburger in its spot, 44px tap targets via
-`padding: 10px; margin: -10px`).
+- **Logo → Site Logo block** (`core/site-logo`) with the logo uploaded as a media item and set as
+  `site_logo` / `custom_logo`. The owner changes it once; header, overlay and footer all update.
+  **An SVG logo needs size metadata**: insert it with `wp_insert_attachment` (uploads normally
+  refuse SVG) and then `wp_update_attachment_metadata($id, ['width'=>200,'height'=>200,'file'=>...])`
+  — without it the block ignores its `width` and shows the logo huge.
+- **One menu.** Navigation blocks with no `ref` fall back to the newest `wp_navigation` post. Create
+  ONE "Main menu" `wp_navigation` post on deploy (only if missing) and leave `ref` off in both the
+  header and overlay navs — the owner edits one menu and both update.
+- Colours/spacing as block attributes using preset slugs (`backgroundColor: "dark"`,
+  `var:preset|spacing|50`), so the owner sees real controls.
+- Link colours on dark grounds: set `style.elements.link.color` (and `:hover`) on the group.
 
-Mechanics (all reusable):
+## The header
 
-- Panel = `position: absolute; inset: 100% 0 auto 0` on the `.is-menu-open` container. The
-  sticky header is the containing block (sticky counts as positioned) — no hardcoded height.
-- **WP has THREE positioned wrappers that hijack the anchoring** — neutralize each with
-  `position: static`: the nav block itself, `.wp-block-navigation__responsive-dialog`, and
-  `.wp-block-navigation__responsive-close`. Diagnose with `element.offsetParent`; don't guess.
-- **Keep `overflow: visible` on the panel** — the close X sits above the panel edge and
-  `overflow: auto` clips it into a visible-but-unclickable state. Long menus scroll via the
-  inner `-container-content` wrapper instead.
-- Hide the hamburger while open:
-  `.your-nav:has(.is-menu-open) .wp-block-navigation__responsive-container-open { visibility: hidden }`.
+Typical shape: full-width group (own className, e.g. `acme-header`) → wide flex row → Brand group
+(Site Logo + Site Title) and a right group (Navigation + a Buttons block). The booking/CTA button is
+a normal Button block — no menu-item hacks.
 
-## Same-page anchor links in the mobile overlay ship BROKEN by default
+- Sticky header: group attribute `style.position.type: "sticky"` (needs `appearanceTools`).
+- Remove what the owner doesn't want from the parent's templates in the generator (Ipsum pins a
+  floating search-bar part into every template — strip that line, keep the part available).
 
-On WP 7.0 the nav overlay does not close when a `#anchor` menu link pointing at the same page
-is tapped — and `html.has-modal-open` locks scrolling, so the tap looks completely dead. A
-one-page port (this skill's flagship flow) hits this on every menu item. Ship a small JS
-snippet (type `js`, `run_at: wp_footer`) with the site frame:
+## The mobile menu: navigation overlay part (WP 7.0+)
 
-- On click of an in-page `#anchor` link inside
-  `.wp-block-navigation__responsive-container.is-menu-open`: prevent default, close the overlay
-  (click its close button), then **wait for `has-modal-open` to clear** before scrolling to the
-  target — a `requestAnimationFrame` loop (~60 tries) works; scrolling earlier is swallowed by
-  the scroll lock. A fixed `setTimeout` is not enough (10ms was not; the class clears on its
-  own schedule).
-- Leave links to other pages and desktop (no overlay) behaviour untouched.
+Build the open mobile menu as its own template part, from blocks, instead of restyling core's
+default takeover with CSS:
 
-verification.md's menu behavioral check ("tapping a link closes the menu AND scrolls") is what
-catches this; this recipe is the fix.
+- Header nav attributes: `"overlay":"navigation-overlay","overlayMenu":"mobile","icon":"menu"`.
+- `parts/navigation-overlay.html` → delegate to `patterns/navigation-overlay.php` (`Block Types:
+  core/template-part/navigation-overlay`).
+- Inside: a full-height group on the brand ground, an action bar with the Site Logo and a
+  **Navigation Overlay Close** block (`core/navigation-overlay-close`), the menu as a vertical
+  Navigation (`overlayMenu: "never"`, big font size), and the CTA as a normal Button.
 
-## Gotchas (positioning, specificity)
+The old CSS "dropdown panel" recipe (neutralising three positioned wrappers, overflow clipping) is
+no longer needed when the overlay part is available.
+
+**Wider collapse breakpoint.** Core switches to the menu button only below 600px. If the design
+collapses wider (e.g. 1080px), show the button and hide the inline list in between, scoped to
+your header:
+```css
+@media (min-width: 600px) and (max-width: 1079px) {
+  .acme-header .wp-block-navigation__responsive-container-open:not(.always-shown) { display: flex; }
+  .acme-header .wp-block-navigation__responsive-container:not(.hidden-by-default):not(.is-menu-open) { display: none; }
+}
+```
+Tested with the overlay part.
+
+## The footer
+
+A pattern like the header. Decorations (borders, medallions, patterns) are **CSS backgrounds** on
+the footer's `::before`/`::after`, files in the child theme `assets/images/`, not image blocks — see
+references/css-rules.md. Leave room for them with padding (e.g. top padding
+`calc(56px + var(--wp--preset--spacing--70))` for a 56px border band).
+
+Global values in the footer (phone, address, hours) are candidates for an options page + bindings
+(references/dynamic-content.md) if they repeat elsewhere.
+
+## Mobile header rules
+
+- **Verify at ~390px, ~700px, and desktop, with the overlay OPEN.**
+- Keep logo, name, menu button and CTA on one row on phones: `white-space: nowrap` on the title and
+  button; `flex-shrink: 0` on the logo (flex squashes it otherwise); smaller title and tighter gaps
+  at ≤420px. Preset font-size classes are `!important`, so a size override needs `!important` too
+  (comment why).
+
+## Same-page anchor links in the mobile overlay
+
+On WP 7.0 the overlay did not close when a same-page `#anchor` link was tapped, and
+`html.has-modal-open` locked scrolling, so the tap looked dead. Re-test on your version with the
+overlay part; if it still happens, ship a small JS fix (in the theme or plugin):
+
+- On click of an in-page `#anchor` link inside an open overlay: prevent default, click its close
+  button, then **wait for `has-modal-open` to clear** (a `requestAnimationFrame` loop, ~60 tries)
+  before scrolling — a fixed `setTimeout` is not enough.
+- Leave links to other pages and desktop behaviour untouched.
+
+## Gotchas
 
 - **Never put `backdrop-filter` (or `filter`/`transform`) on an ancestor of `core/navigation`.**
-  Core's mobile overlay is `position: fixed; inset: 0`, and a filtered ancestor becomes its
-  containing block — the "full-screen" menu renders inside the 60px header bar. For a
-  translucent blurred header, put the background + blur on a `::before` pseudo-element
-  (absolute, inset 0, z-index -1) and keep the header itself filter-free.
-- **Core's layout and interactive-state styles tie or beat snippet CSS of equal specificity**
-  (they print later). Any override of `.wp-block-buttons-is-layout-flex`, `.is-menu-open`
-  padding, etc. needs one extra parent class (`.bc-header .bc-nav__cta`) to win on specificity,
-  not order. This recurs constantly — treat it as the default when styling core blocks.
-- **Behavioral verification, not just screenshots**: `document.elementFromPoint` hit-test on the
-  close X (catches clipped-but-visible), X-click closes, tapping a menu link closes the menu AND
-  scrolls to the anchor, other viewports unchanged.
+  The overlay is `position: fixed`, and a filtered ancestor becomes its containing block — the
+  "full-screen" menu renders inside the header bar. Put blur on a `::before` instead.
+- **Core's layout and interactive-state styles tie or beat your CSS at equal specificity.** Add one
+  parent class (`.acme-header .wp-block-…`) to win on specificity, not order.
+- **Behavioral verification, not just screenshots**: open the overlay, `document.elementFromPoint`
+  hit-test the close button, close it, tap a menu link (closes AND scrolls), other viewports unchanged.

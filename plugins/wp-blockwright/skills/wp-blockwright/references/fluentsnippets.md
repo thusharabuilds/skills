@@ -1,7 +1,7 @@
-# FluentSnippets — where all custom PHP and CSS lives
+# FluentSnippets — small non-block tweaks only
 
 ## Contents
-- Why FluentSnippets
+- What FluentSnippets is (still) for
 - Snippet meta schema
 - The programmatic API (create / publish / update)
 - API gotchas (each caused a real failure)
@@ -9,18 +9,18 @@
 - Organizing snippets
 - Installing many snippets at once (zip recipe)
 
-## Why FluentSnippets
+## What FluentSnippets is (still) for
 
-Custom block PHP and CSS is hosted as FluentSnippets snippets, not in `functions.php` and not in
-a bespoke plugin, because: the owner can see and manage every piece of code from the dashboard;
-snippets are real files on disk (`wp-content/fluent-snippet-storage/N-slug.php`) so file tools
-still work; and a snippet that throws a fatal is **auto-disabled** instead of white-screening
-the site. Trade-off accepted: blocks depend on FluentSnippets staying active. Because
-FluentSnippets and SCF host and render all custom code, keeping both updated is a security
-requirement, not housekeeping — each has shipped real security fixes.
+**Custom blocks no longer live here** — they go in the site plugin
+(references/custom-blocks.md), and global CSS goes in the child theme (references/css-rules.md).
+FluentSnippets is optional; use it only for small PHP hooks or CSS tweaks the owner wants to see
+and switch off from the dashboard (a redirect, an admin tweak, a one-off style fix). If it's
+active, keep it updated — it runs code on every request.
 
-Convention: **one PHP snippet per block + one paired CSS snippet**, same group. Every snippet's
-source of truth is a local file in the project's `wp-build/` tree.
+Useful properties when you do use it: snippets are real files on disk
+(`wp-content/fluent-snippet-storage/N-slug.php`), and a snippet that throws a fatal is
+**auto-disabled** instead of white-screening the site. Every snippet's source of truth is still a
+local file in `wp-build/`.
 
 ## Snippet meta schema
 
