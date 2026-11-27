@@ -70,7 +70,11 @@ every change carries the WordPress cost above.
    available. FluentSnippets is optional (small tweaks only).
 3. Confirm tooling: Novamira is connected (MCP or CLI — either works, the abilities are the
    same), and a browser-automation tool (Playwright MCP, the agent's built-in browser, or
-   similar) is available — it is required to finalize Gutenberg content batches.
+   similar) is available — it is required to finalize Gutenberg content batches and to check
+   the result against the design.
+4. **Local or hosted?** If the site's files are on this machine (a Local / localhost / `.local`
+   site), deploys are a folder copy and photos import straight from disk; otherwise use the
+   zip and upload-link paths. Decide once, now — references/novamira.md, "Local or hosted".
 
 If a plugin is missing, offer to install it (via execute-php — don't assume a wp-cli ability)
 — cheap on a staging site the gate has already confirmed. Anything else missing: stop and tell the user what to install or confirm
@@ -88,7 +92,9 @@ before building.
 2. **Dynamic / repeating sections** (blog lists, CPT card grids, same-layout item pages —
    services, team, projects) → **Query Loop + core post
    blocks**. A single custom-field value inside any block layout → **Block Bindings**
-   (`core/post-meta`) on a plain core block — no custom block, no PHP rendering.
+   (`core/post-meta`) on a plain core block — no custom block, no PHP rendering. A listing
+   Query Loop can't express (tabs, groups, a featured item) → a custom block that queries the
+   entries in PHP (references/dynamic-content.md).
 
 Never place a block that stores its own fields inside a loop — every card would show the same
 content. Inside loops, data must come from the *looped post*.
@@ -96,20 +102,28 @@ content. Inside loops, data must come from the *looped post*.
 ## Model the content, don't just copy the pages
 
 While surveying the source site, ask what each piece of content *is*, not just what pages
-exist. When a better model applies, recommend it and **check with the owner before
-deciding** — never silently pick either way:
+exist. Then **ask the owner, in one go before building**, how each kind should be stored —
+using the WordPress terms people know, each with a short plain hint, and the organised option
+marked *Recommended*. If the request already says (e.g. "team members as a CPT"), that decides
+it; don't ask again. Never silently pick either way: these answers shape the whole build.
 
-- **Items of the same kind sharing one layout** (services, team members, projects,
-  locations…) → a **CPT + custom fields** (step 5, references/dynamic-content.md): one
-  template keeps them identical, the listing updates itself via Query Loop, the owner adds
-  the next item by filling in fields. (A real port silently built three same-layout service
-  pages as separate block pages; adding a fourth now means hand-copying one.)
+| Content | Recommend | Plain hint for the owner |
+|---|---|---|
+| Single values used in many places (phone, email, address, hours, socials) | **Options page** | typed once, every page updates |
+| Repeated real things that may show on several pages (services, team members, testimonials, products, locations) | **Custom post type (CPT)** + custom fields | each one its own entry, like a post |
+| A list that only lives in one section (FAQ, feature list, steps) | **Repeater field** in the block | a list inside the section |
+| One-off text or image in one section (a headline, an intro) | **Custom field** in the block | one editable box in the section |
 
-- **Global values repeated across pages** (contact email, phone, address, socials) → an
-  **SCF options page**, pulled into blocks via Block Bindings — the owner changes them
-  once, every page updates (recipe in references/dynamic-content.md).
+(A real port silently built three same-layout service pages as separate block pages; adding a
+fourth meant hand-copying one.) Recipes:
+options page and CPTs in references/dynamic-content.md, block fields in
+references/custom-blocks.md.
 
-- **Anything that submits data** (contact form, newsletter signup, booking, quote request) →
+In the same message, ask the user to **sign in to WordPress in the browser** you'll test with
+(only if it isn't already). Draft previews and the editor need it later, and asking now — while
+the user is answering anyway — lets building and checking run without waiting for them.
+
+**Anything that submits data** (contact form, newsletter signup, booking, quote request) →
   **not ours to build.** Raise it during the survey, before building anything: the owner creates
   the form in their form plugin (Fluent Forms, WPForms, Contact Form 7, Gravity — whichever
   they already run) and hands back a **shortcode or block name**; you place and style it
@@ -216,6 +230,10 @@ before designing anything.
 - **Reference theme tokens** (`--wp--preset--*`, `--wp--custom--*`) in every stylesheet and inline
   SVG — never hardcode colors, sizes, or spacing — and **give every CSS rule a one-line "why"
   comment**. Global Styles then re-skins everything, and the next agent knows which rules matter.
+  Design sizes between tokens round to the nearest one; illustrations keep their own colours.
+- **One source per shared look.** Buttons, links and headings come from theme.json elements
+  (custom blocks add `wp-element-button`); other shared looks from theme.json custom values;
+  only what the plugin's blocks alone share goes in its `common.css` (references/css-rules.md).
 - **Don't reformat block markup** in patterns or templates once it works. The editor compares it
   exactly; a tidy-up can turn valid blocks invalid.
 - **Keep AGENTS.md and DESIGN.md current** with every change (what lives where, tokens by role,
@@ -246,3 +264,4 @@ before designing anything.
 | references/css-rules.md | Before writing CSS — where CSS lives, resets, tokens, specificity |
 | references/verification.md | Steps 4 & 6 — the QA recipes that actually catch bugs |
 | references/fluentsnippets.md | Only if adding a small non-block tweak as a snippet |
+| scripts/write-blocks.php | Writing SCF block content to a page — turns plain values into SCF's stored format |

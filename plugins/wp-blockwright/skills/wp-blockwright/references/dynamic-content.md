@@ -133,11 +133,25 @@ rebuild that pattern, 100% from native blocks:
 
 ## CPTs and custom taxonomies
 
-Register CPTs + their fields via SCF from the dashboard (or `execute-php`), with `show_in_rest`
-and the CPT public/queryable — required for bindings and Query Loop targeting. A CPT grid is the
-same Query Loop recipe with the query's post type set (inherit off). For bespoke card logic core
-can't express, a dynamic PHP block reading `$block->context['postId']` (`usesContext:
-['postId']`) is the escape hatch — never an SCF/instance-field block inside a loop.
+Define CPTs, taxonomies and their field groups as **SCF local JSON in the site plugin's root
+`fields/`** (`post_type_acme_service.json`, `taxonomy_acme_service_type.json`,
+`group_acme_service.json`) — not in the dashboard. SCF registers them from the files, so the
+content model ships with the plugin (copy it to the live site and the post type is there, already
+set up), stays next to the blocks that read it, and can't be changed by accident (SCF lists it
+greyed out, with no edit button). Set `show_in_rest` — required for bindings, Query Loop and the
+editor. Easiest way to get a valid file: build it once in SCF on a local site, export the JSON,
+move it into `fields/`, delete the database copy.
+
+**Which listing to build:**
+- **A plain list or grid of entries** → Query Loop with the post type set (inherit off), same
+  recipe as the blog list. The owner tunes columns and order in the side panels.
+- **Anything more** — tabs per category, grouped sections with counts, a featured item per
+  group, extra per-item links — → a custom block that queries the entries in PHP
+  (`get_posts`/`get_terms`) and lays them out. The owner still edits entries as entries; the
+  block's own fields hold only its headings and labels. Query Loop can only repeat one card.
+- Inside a Query Loop, for card logic core can't express, a dynamic PHP block reading
+  `$block->context['postId']` (`usesContext: ['postId']`) — never an SCF/instance-field block
+  inside a loop.
 
 - **"Related items" on a single CPT page**: WP 7.1's Query Loop has an "exclude current post"
   option (not yet tested here) — use it instead of custom query code.
@@ -164,7 +178,7 @@ add_action('acf/init', function () {
    only admins should change them. The default (`edit_posts`) would let any Author-level
    account rewrite the site-wide phone number.
 
-2. **Fields**: same `acf_import_field_group` recipe as always (references/custom-blocks.md),
+2. **Fields**: a local JSON field group in the plugin's `fields/` (references/custom-blocks.md),
    with the `location` rule targeting `options_page == site-info`. Populate via execute-php:
    `update_field('field_key', $value, 'option')`.
 3. **Display in core blocks**: `core/post-meta` reads only post meta, so the same file
@@ -188,3 +202,11 @@ add_action('init', function () {
    `get_field('contact_email', 'option')` directly.
 4. Verify: change a value on the options page, reload a front-end page that binds it — the
    new value must appear (and the binding renders empty, visibly, if the key is wrong).
+
+**Where bindings stop.** A binding replaces a block's whole text with one plain value: no line
+breaks (a multi-line address, a week of opening hours) and no two links in one paragraph (phone ·
+email). Expose ready-made single values from the source (`phone_url`, `address` joined with
+commas, a `hours` summary) where one line is enough. Where the design needs lines or several
+links — typically the footer's contact columns — use a small custom block that reads the options
+page in PHP (references/site-frame.md). Never type the values into a pattern as a fallback: the
+owner changes them on the options page and the footer silently keeps the old ones.

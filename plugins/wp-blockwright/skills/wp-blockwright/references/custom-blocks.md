@@ -3,6 +3,7 @@
 ## Contents
 - Choosing the block type per section
 - Where block code lives: the site plugin
+- Shared CSS for several blocks
 - The block-authoring workflow
 - Escape every field at the point of output
 - PHP-only block recipe (WP 7.0 autoRegister)
@@ -47,8 +48,12 @@ FluentSnippets, not the child theme.
 Layout (tested):
 ```
 acme-blocks/
-├── acme-blocks.php          # header + the two loops below
+├── acme-blocks.php          # header + the registrations below
 ├── AGENTS.md                # what's here, how to deploy, field-key rule
+├── assets/common.css        # pieces several blocks share (see "Shared CSS")
+├── fields/                  # site-wide SCF local JSON: post types, taxonomies,
+│                            #   options-page and CPT field groups
+├── inc/                     # options page, bindings source, CPT helpers (PHP)
 └── blocks/
     └── hero/                # one folder per block, named after the section
         ├── block.json
@@ -68,23 +73,55 @@ Main file:
  * Text Domain:      acme-blocks
  */
 defined('ABSPATH') || exit;
+foreach (glob(__DIR__ . '/inc/*.php') as $file) require $file;
+add_action('init', function () { // shared handles first: block.json can only name registered handles
+  wp_register_style('acme-blocks-common', plugins_url('assets/common.css', __FILE__), [], '0.1.0');
+  wp_style_add_data('acme-blocks-common', 'path', __DIR__ . '/assets/common.css'); // lets WP inline it
+}, 4);
 add_action('init', function () {
   foreach (glob(__DIR__ . '/blocks/*/block.json') as $file) register_block_type(dirname($file));
 }, 5);
 add_filter('acf/settings/load_json', function ($paths) {
+  $paths[] = __DIR__ . '/fields'; // site-wide definitions that belong to no single block
   foreach (glob(__DIR__ . '/blocks/*/fields', GLOB_ONLYDIR) as $dir) $paths[] = $dir;
   return $paths;
 });
 ```
 `Update URI: false` stops WordPress.org ever offering an "update" from a same-named plugin. Use
-`Requires Plugins: advanced-custom-fields` instead if the site runs ACF.
+`Requires Plugins: advanced-custom-fields` instead if the site runs ACF. There is deliberately no
+`save_json` path: the JSON files are read-only definitions that ship with the code, and SCF shows
+them greyed out with no edit button, so nobody changes the content model from the dashboard by
+accident (a field the code doesn't know about would just be ignored).
+
+## Shared CSS for several blocks
+
+Button variants, list rows, photo frames, a status dot — anything two or more blocks draw — goes
+in one `assets/common.css`, registered as a handle before the blocks (main file above) and listed
+**first** in each block's `style`: `"style": ["acme-blocks-common", "file:./style.css"]`. WordPress
+loads it once per page, only when one of the blocks is present, and inside the editor iframe too.
+Copying the same rules into each block's `style.css` drifts the moment one copy is edited.
+
+What does NOT go here: anything a core block or another page could also need. Buttons, links and
+headings take their look from theme.json elements; corner shapes, borders and shadows from
+theme.json custom values (references/css-rules.md, "Global components"). The shared file holds
+only what is specific to the plugin's blocks, built from theme tokens.
+
+Two rules every site's `common.css` starts with:
+```css
+/* Sections butt together: beats core's 24px block gap between top-level blocks
+   (:root :where(.is-layout-constrained) > * prints after us at equal specificity). */
+:root .acme-section { margin-block: 0; }
+```
+plus the scoped box-sizing reset (references/css-rules.md). Each section block carries the
+`acme-section` class and brings its own `padding-block`, so spacing between sections is decided
+by the sections, not by core.
 
 ## The block-authoring workflow
 
 1. **Author locally first** in `wp-build/plugins/<site>-blocks/` (source of truth, in Git).
    `php -l` every PHP file.
-2. **Deploy as a zip** (references/novamira.md): first install extracts it to
-   `wp-content/plugins/`, updates copy over the files; then `activate_plugin()`.
+2. **Deploy** (references/novamira.md, "Local or hosted"): on a local site copy the folder into
+   `wp-content/plugins/`; on a hosted site ship it as a zip. Then `activate_plugin()` once.
 3. Verify: each block registered (`WP_Block_Type_Registry::get_instance()->is_registered()`), the
    block's CSS present on a page that uses it and **absent** on one that doesn't, marker strings
    present in the deployed files. Bump the plugin and block.json `version` on every change.
@@ -167,7 +204,7 @@ add_action('init', function () {
   "version": "0.1.0",
   "textdomain": "acme-blocks",
   "supports": { "anchor": true, "align": ["full"], "html": false },
-  "style": "file:./style.css",
+  "style": ["acme-blocks-common", "file:./style.css"],
   "acf": { "blockVersion": 3, "mode": "preview", "renderTemplate": "render.php" }
 }
 ```
@@ -185,9 +222,22 @@ This is the ACF-recommended way since 6.0; `acf_register_block_type()` is legacy
   - Image, Link, WYSIWYG, Repeater → click opens a small toolbar editor: add
     `acf_inline_toolbar_editing_attrs(['button'])` to the element. A repeater edits as a whole,
     not per row.
-  - Guard both with `function_exists()` so the block still renders if SCF is older.
+  - **Only in the editor.** Both helpers print their attributes everywhere, so unguarded they
+    ship `data-acf-inline-contenteditable` and "Type to edit..." placeholders to every visitor.
+    Wrap them once at the top of `render.php` and use the wrappers:
+    ```php
+    $txt = fn($field) => $is_preview && function_exists('acf_inline_text_editing_attrs')
+      ? acf_inline_text_editing_attrs($field) : '';
+    $bar = fn($fields) => $is_preview && function_exists('acf_inline_toolbar_editing_attrs')
+      ? acf_inline_toolbar_editing_attrs($fields) : '';
+    ```
+    Then `<h1 class="acme-hero__title" <?php echo $txt('heading'); ?>>`. Verify with curl: zero
+    `data-acf-inline` strings on the front end.
   - In preview (`$is_preview`), render an empty-state placeholder for an empty link/image so the
     owner has something to click.
+- **Hide with a class, not the `hidden` attribute.** SCF's editor preview drops boolean HTML
+  attributes, so tabs or panels hidden with `hidden` all show at once in the editor. Add a class
+  (`is-hidden`) with `display: none` alongside it; front-end scripts toggle both.
 - **Use SCF's own field types as they are** — a button is a Link field, a list is a Repeater, a
   photo is an Image field (return `id`, render with `wp_get_attachment_image()`). Don't split
   fields into Text just to make them typeable in place; the toolbar pop-up is fine for the rest.
@@ -197,6 +247,14 @@ This is the ACF-recommended way since 6.0; `acf_register_block_type()` is legacy
 Icon/asset choices: expose a select field whose values map to an inline-SVG library inside the
 render callback — the owner picks "Shield (assurance)" from a dropdown, never touches SVG.
 
+**Buttons in custom blocks** get the class `wp-element-button` (plus a variant class if needed),
+so they take the theme's button look from theme.json `styles.elements.button` — the same rules
+the core Button block uses (references/css-rules.md). Don't restyle the base button per block.
+
+**Decorations the theme also uses** (a border band, a motif): the block keeps its own copy of the
+file in its folder, with a comment naming the master copy in the theme. Pointing at the theme's
+file would make the block depend on that theme; a tiny duplicated SVG is the cheaper trade.
+
 ## SCF field groups — local JSON in the plugin
 
 Keep each block's field group as a JSON file in `blocks/<name>/fields/` and point SCF at those
@@ -205,11 +263,17 @@ from the file (nothing in the database), repeater sub-fields included, and the g
 the code. Location rule: `[{ "param": "block", "operator": "==", "value": "acme/hero" }]`.
 Sub-fields carry `"parent_repeater": "<repeater key>"`.
 
+Site-wide definitions go in the plugin's root `fields/`: custom post types (`post_type_*.json`),
+taxonomies (`taxonomy_*.json`) and the field groups for them and for the options page (tested —
+SCF local JSON loads all of these). Options pages themselves can't be local JSON in SCF; register
+them in PHP (references/dynamic-content.md). Write fields with fixed, readable keys
+(`field_acme_service_price`) — block data and post meta point at keys.
+
 **Never use the `scf/create-field-group` ability** — it creates the group with ZERO field objects
 (text still renders from raw meta, but images return a bare ID and repeaters a row count).
 Diagnose with `acf_get_field('field_key')` → NOT FOUND.
 
-If you must create a group in the database instead (options pages, CPT fields from execute-php):
+If you must create a group in the database instead (a site that can't take plugin files):
 `acf_import_field_group($full_definition)` — then **check every sub-field key with
 `acf_get_field()`, not just the top-level ones.** A real import created a repeater but silently
 skipped its sub-field; the repeater rendered empty with an "Undefined array key _name" warning.
@@ -237,6 +301,16 @@ references/novamira.md). ACF block data uses the **flattened meta format** insid
 
 Every field: `field_name: value` plus `_field_name: field_key`. Repeaters: `items: <count>` +
 one flattened row entry per sub-field. Image fields take the attachment ID.
+
+**Don't hand-write this format — use `scripts/write-blocks.php`.** Give it each block's name and
+plain values (strings, attachment IDs, link arrays, repeater rows as lists); it reads the real
+field keys from the block's field group, flattens everything, and — for a page made only of the
+plugin's blocks — writes it through the fast lane with `wp_slash()`, then checks the stored copy
+and your marker strings. It stops before writing if a value names a field that doesn't exist (a
+typo would otherwise drop that content silently). There is no official SCF/ACF helper for this;
+hand-flattening is where wrong keys creep in, and a wrong key shows as an empty field in the
+editor. For pages that mix in core blocks, use only its flattening part to build each block's
+`data` for the queue.
 
 ## `&` and special characters (old bug, now fixed)
 
