@@ -16,6 +16,7 @@ gets read back (marker string or md5).
 
 ```
 QA pass:
+- [ ] Side by side with the original design: same measurements in both
 - [ ] curl checks on every built page (markup, leaks)
 - [ ] Screenshots at ~390px, ~700px, desktop — nav overlay OPEN included
 - [ ] Horizontal-overflow check at 390px
@@ -25,6 +26,15 @@ QA pass:
 - [ ] Regression: re-check previously built pages
 ```
 
+## Side by side with the original design
+
+When the design exists as a page (static HTML, a built site), serve it locally and open it in a
+second tab next to the WordPress page. Run **one measuring script in both tabs** at the same
+viewport: font sizes and line heights of the headings, section heights and paddings, container
+widths, gaps between sections, image boxes. Compare the numbers, not screenshots — a 24px strip
+between two sections or a headline 14px too big is obvious in a table and easy to miss by eye.
+Repeat at the phone and tablet widths.
+
 ## Front-end markup checks (curl)
 
 Cheap and catches real bugs — curl each page and check:
@@ -32,6 +42,7 @@ Cheap and catches real bugs — curl each page and check:
 - HTTP 200; every section's key markup present (images, repeater rows, anchors).
 - **Zero literal `<!-- wp:` strings** in rendered output (broken block markup).
 - No bare `u0026` (old `&` bug, fixed in Novamira 1.11.3 — see references/custom-blocks.md).
+- Zero `data-acf-inline` strings — inline-editing attributes belong to the editor only.
 - Expected token values (`--wp--preset--*`) and asset URLs; HEAD-check fonts/images (200).
 - When verifying stored block JSON, grep for plain strings — serialized block JSON does not
   escape slashes (`"source":"core/post-meta"` appears literally).
@@ -58,13 +69,19 @@ Cheap and catches real bugs — curl each page and check:
 ## Editor editability check
 
 Mandatory for every custom block, and again after recreating field groups. Open the page in the
-block editor (fresh admin-access-link — sessions expire in ~30 min), select each block via
+block editor (in the browser the user signed in at the start), select each block via
 `wp.data.dispatch('core/block-editor').selectBlock(clientId)`, and confirm the side panel shows
 **populated** fields (repeater rows present, image thumbnails set, dropdowns on the right
 value). Text fields rendering on the front end does NOT prove fields exist — ACF falls back to
 raw meta (references/custom-blocks.md). Editor previews should show the real design (block.json
 `style` loads inside the editor iframe). For SCF blocks with inline editing, also click a text
 field in the preview and type, and click the image/link to confirm the toolbar editor opens.
+
+**Type only on a throwaway copy.** Autosave writes a draft's edits straight into the post, so a
+"test, don't save" edit on the real page ends up in its content (real build: "TEST" landed in a
+headline). Duplicate the page for typing tests, delete the copy after, and read the real page's
+content back before publishing. Prefer reading and measuring checks over clicks — some browser
+tools ask the user to approve every click — and group the few real click tests together.
 For theme patterns (header, footer, overlay), open each in the Site Editor and confirm there's no
 "unexpected or invalid content" warning.
 

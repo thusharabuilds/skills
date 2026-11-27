@@ -93,8 +93,16 @@ the footer's `::before`/`::after`, files in the child theme `assets/images/`, no
 references/css-rules.md. Leave room for them with padding (e.g. top padding
 `calc(56px + var(--wp--preset--spacing--70))` for a 56px border band).
 
-Global values in the footer (phone, address, hours) are candidates for an options page + bindings
-(references/dynamic-content.md) if they repeat elsewhere.
+The header and footer stay **core blocks in template parts** — Navigation (the owner edits the
+menu in WordPress's own menu editor, and it brings the mobile overlay, keyboard and screen-reader
+support), Site Logo, Buttons. Don't rebuild a whole header or footer as a custom block: all of
+that would have to be rebuilt, and the owner would lose normal menu editing.
+
+Site-wide values in the footer (phone, address, hours) come from the options page, never typed
+into the pattern. A single plain value binds to a core block (references/dynamic-content.md);
+anything with line breaks or several links in one line goes in **one small custom block** for
+just those columns, placed inside the footer pattern among the core blocks. (If the plugin is
+ever off, only that block goes blank; the rest of the footer keeps working.)
 
 ## Mobile header rules
 

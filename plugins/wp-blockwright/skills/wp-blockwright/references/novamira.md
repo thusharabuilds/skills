@@ -1,8 +1,9 @@
 # Novamira — how every write reaches the site
 
 ## Contents
-- Reaching the site (and choosing the right ability)
+- Reaching the site (CLI call shape, choosing the right ability)
 - execute-php patterns (transport, verification)
+- Local or hosted — two delivery paths
 - Uploading files and deploying the theme/plugin (zip recipe)
 - No wp-cli? Use execute-php
 - Approvals, sign-in and read-only calls
@@ -19,6 +20,17 @@ so don't hard-code them.
 
 What follows is what discovery will *not* tell you: which ability to reach for, in what order,
 and how each one fails.
+
+**CLI call shape.** Three parts every execute-php call needs, none of which can be switched off:
+```
+novamira --site <profile> run novamira/execute-php --input @call.json --yes --json
+```
+- `--site <profile>`: the CLI has no default site, by design, so work never lands on the wrong
+  one. Record the profile name in the project's AGENTS.md so it isn't re-discovered each session.
+- The full ability name `novamira/execute-php` — the bare `execute-php` is "Ability not found".
+- `--yes`: running code is marked destructive, so every call needs it, read-only ones included
+  (code-running abilities can't be set to never ask). It confirms; it doesn't replace the owner's
+  approval of the work.
 
 ## Choosing the right ability
 
@@ -56,6 +68,21 @@ using as extra checks.
   8 KB of Gutenberg markup survives byte-exact.
 - **Make content scripts idempotent by slug**: `get_page_by_path($slug)` first, update in place
   if it exists. Re-running can never duplicate posts.
+
+## Local or hosted — two delivery paths
+
+Only delivery differs; building, content and checks are the same for both. The project's
+`wp-build/` copy is the master either way — edit there, then deliver.
+
+| | **Local site** (files on this machine: Local, localhost, `.local`) | **Hosted site** |
+|---|---|---|
+| Theme / plugin code | Copy the folder into `wp-content/themes/` or `plugins/` (`rsync -a --delete`) — instant | Zip, upload, unzip (recipe below) |
+| A quick CSS or JSON fix | Same copy | `novamira/write-file` / `edit-file` on that one file — they refuse PHP outside the sandbox, so any PHP change goes by zip |
+| Photos | `media_handle_sideload()` from the design's image folder in one execute-php call (the web server runs as this user) | Upload link per file, or one zip |
+
+On a local site, never edit the deployed copy directly — the next copy from `wp-build/`
+overwrites it. Avoid symlinking the project folder into WordPress instead: plugin and theme URL
+functions resolve symlinked paths inconsistently.
 
 ## Uploading files
 
@@ -216,7 +243,9 @@ invalid blocks).
 
 ## Self-finalizing a batch (no human needed)
 
-The finalizer runs in a wp-admin browser tab. The agent can open one itself:
+The finalizer runs in a wp-admin browser tab. If the user signed the browser in at the start
+(SKILL.md, "Model the content"), go straight to step 3's finalize page. Otherwise the agent can
+open a session itself — only where the user is fine with that:
 
 1. Create an admin access link → returns an exchange URL + token + nonce.
 2. `curl -X POST` the exchange URL with headers `X-Novamira-Admin-Access-Token` and

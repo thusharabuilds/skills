@@ -139,19 +139,28 @@ don't count on a wp-cli ability being there.
   (`radius.md` → `--wp--custom--radius--md`). Verify the emitted name before using it.
 - **`appearanceTools: true`** — needed for controls like sticky position on groups.
 - **`styles`**: root colours/font/size, root padding, element styles (`link`, `heading`, `h1`–`h6`,
-  `button`). **Hover/focus/active states belong here** (`":hover"`, `":focus"`, `":active"` on
+  `button`, `caption`). **Hover/focus/active states belong here** (`":hover"`, `":focus"`, `":active"` on
   `elements.button` and `elements.link`, WP 7.0+, tested) — the owner can retune them in Global
   Styles. Only animation (transitions, lifts) stays in CSS.
+- **The whole button look goes in `elements.button`** — shape (radius, padding, border, font) as
+  well as colours. Element styles print on every page and in the editor, for `.wp-element-button`,
+  so custom blocks that use that class match the core Button block. Styles put only under
+  `styles.blocks.core/button` load only when a core Button block is on the page — the plugin's
+  buttons then miss them (real build).
 - **Block-level styles can out-rank element styles.** The parent may set `styles.blocks.core/button`
-  typography; your `elements.button` change then doesn't show on Button blocks. Override at
-  `styles.blocks.core/button` too (real build: buttons stayed at the parent's size/weight until this).
+  typography; your `elements.button` change then doesn't show on Button blocks. Repeat the
+  values at `styles.blocks.core/button` too (real build: buttons stayed at the parent's
+  size/weight until this).
+- **Section headings, eyebrows and other repeated text styles**: if every section heading looks
+  the same, that's `elements.h2` (etc.), not a class each block re-declares.
 - **Root padding + full-bleed**: `styles.spacing.padding` left/right is the site gutter — pair it
   with `settings.useRootPaddingAwareAlignments: true` so `alignfull` sections reach the edge while
   their content keeps the gutter.
 - **blockGap white stripes**: the root blockGap puts a top margin on every root sibling and every
-  top-level section. Don't set `blockGap: "0px"` (collapses spacing in posts) — zero it with two
-  scoped rules: `.wp-site-blocks > * { margin-block-start: 0 }` and
-  `.entry-content > [class*="acme-"] { margin-block-start: 0 }`.
+  top-level section. Don't set `blockGap: "0px"` (collapses spacing in posts and plain pages) —
+  zero it where it hurts: `.wp-site-blocks > * { margin-block-start: 0 }` in the child theme for
+  the frame, and the `:root .acme-section { margin-block: 0 }` rule in the plugin's shared CSS for
+  section blocks (references/custom-blocks.md).
 - **Per-screen-size styles (WP 7.1, not yet tested):** `@tablet` / `@mobile` keys in `styles` with
   breakpoints in `settings.viewport`. Worth trying before writing a media query for a core block;
   test it shows in Global Styles and renders at 390/700/desktop before relying on it.
@@ -161,6 +170,10 @@ don't count on a wp-cli ability being there.
 Add it to `theme.json` and re-deploy — cheap. The boundary test: **would the owner ever want to
 change it site-wide?** Colour, font size, spacing step, radius → theme.json. "This grid is
 `1fr 2fr`" → the block's own CSS.
+
+A design full of in-between sizes (15, 18, 19, 21px…) is the opposite case: map each to the
+**nearest token** and move on, without a new preset or a comment per rule. A scale that grows one
+preset per stray value stops being a scale, and the owner's size picker fills with near-duplicates.
 
 ## AGENTS.md, DESIGN.md and the design guide
 
